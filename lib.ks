@@ -157,6 +157,10 @@ const Pos = newtype {
     .byte :: Int32,
 };
 
+impl Pos as ToString = {
+    .to_string = { .line, .col, ... } => (String.to_string(line) + ":" + String.to_string(col)),
+};
+
 const ErrorPos = newtype {
     .err :: Error,
     .pos :: Pos,
@@ -380,6 +384,23 @@ const Number = newtype {
     .exponent :: Option.t[type {.neg :: Bool, .digits :: UInt32}],
 };
 
+impl Number as ToString = {
+    .to_string = { .neg, .digits, .fraction_digits, .exponent } => (
+        let mut s = "";
+        if neg then (
+            s += "-";
+        );
+        s += String.to_string(digits);
+        if fraction_digits is :Some digits then (
+            s += "." + String.to_string(digits);
+        );
+        if exponent is :Some { .neg, .digits } then (
+            s += "e" + (if neg then "-" else "+") + String.to_string(digits);
+        );
+        s
+    )
+};
+
 impl Number as module = (
     module:
 
@@ -526,6 +547,38 @@ const Value = newtype (
     | :Object List.t[Pair]
 );
 
+impl type (&Value) as ToString = {
+    .to_string = value => match value^ with (
+        | :Null => "null"
+        | :Bool b => if b then "true" else "false"
+        | :Number num => String.to_string(num)
+        | :String str => "\"" + str + "\""
+        | :Array ref values => (
+            if List.is_empty(values) then "[]"
+            else (
+                let mut str = "[" + (type (&Value) as ToString).to_string(values |> List.at(0));
+                for i in 0..List.length(values) do (
+                    let value = values |> List.at(i);
+                    str += "," + (type (&Value) as ToString).to_string(value);
+                );
+                str + "]"
+            )
+        )
+        | :Object ref pairs => (
+            if List.is_empty(pairs) then "{}"
+            else (
+                let { first_key, first_value } = List.at(pairs, 0)^;
+                let mut str = "{\"" + first_key + "\":" + (type (&Value) as ToString).to_string(&first_value);
+                for i in 0..List.length(pairs) do (
+                    let { key, value } = List.at(pairs, i)^;
+                    str += "," + "\"" + key + "\":" + (type (&Value) as ToString).to_string(&value);
+                );
+                str + "}"
+            )
+        )
+    )
+};
+
 impl Value as module = (
     module:
 
@@ -541,10 +594,6 @@ impl Value as module = (
         )
     );
 );
-
-impl Value as ToString = {
-    .to_string = value => "json value"
-};
 
 const Context = newtype (
     | :Array {
