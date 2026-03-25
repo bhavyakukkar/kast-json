@@ -422,6 +422,46 @@ impl Number as module = (
 
     const next = Reader.next;
 
+    const into_f64 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Float64 => (
+        const num_digits = (mut n :: UInt32) => with_return (
+            if n == 0 then return 1;
+            let mut count = 0;
+            while n > 0 do (
+                n = n / 10;
+                count += 1;
+            );
+            count
+        );
+        const uint_to_float = (n :: UInt32) => String.parse[Float64](String.to_string(n));
+        const pow10 = num => (
+            let mut n = 1;
+            for i in 0..num do (
+                n = n*10;
+            );
+            n
+        );
+
+        let mut f = uint_to_float(digits);
+
+        if fraction_digits |> Option.and_then(
+            num => (num != 0) |> BoolPlus.then_some(num)
+        ) is :Some frac then (
+            f = f + uint_to_float(frac) / pow10(num_digits(frac));
+        );
+
+        if neg then (
+            f = -f;
+        );
+
+        if exponent |> Option.and_then(
+            exponent => (exponent.digits != 0) |> BoolPlus.then_some(exponent)
+        ) is :Some { .neg, .digits } then (
+            let factor = pow10(digits);
+            f = f * (if neg then (1.0 / factor) else factor);
+        );
+        f
+    );
+
     const collect_zero_or_more_digits = (reader :: &mut Reader, num :: &mut UInt32) => (
         while peek(&reader^) is :Some c do (
             if not Char.is_ascii_digit(c) then break;
