@@ -125,6 +125,21 @@ const List = (
         )
     );
 
+    const iteri = [T] (
+        a :: &ArrayList.t[T]
+    ) -> std.iter.Iterable[type { UInt32, type (&T) }] => (
+        let mut i = 0;
+        {
+            .iter = f => (
+                iter(a).iter(item => (
+                    let ret = f({i, item});
+                    i += 1;
+                    ret
+                ))
+            ),
+        }
+    );
+
     const is_empty = [T] (list :: &t[T]) -> Bool => length(list) == 0;
 );
 
@@ -611,8 +626,8 @@ impl Value as ToString = {
             if List.is_empty(values) then "[]"
             else (
                 let mut str = "[" + (Value as ToString).to_string((values |> List.at(0))^);
-                for i in 0..List.length(values) do (
-                    let value = values |> List.at(i);
+                for {i, value} in List.iteri(values) do (
+                    if i == 0 then continue;
                     str += "," + (Value as ToString).to_string(value^);
                 );
                 str + "]"
@@ -623,8 +638,9 @@ impl Value as ToString = {
             else (
                 let { first_key, first_value } = List.at(pairs, 0)^;
                 let mut str = "{\"" + first_key + "\":" + (Value as ToString).to_string(first_value);
-                for i in 0..List.length(pairs) do (
-                    let { key, value } = List.at(pairs, i)^;
+                for { i, pair } in List.iteri(pairs) do (
+                    if i == 0 then continue;
+                    let { key, value } = pair^;
                     str += "," + "\"" + key + "\":" + (Value as ToString).to_string(value);
                 );
                 str + "}"
@@ -653,8 +669,8 @@ impl PrettyPrinter as ToString = {
                         { .value = (values |> List.at(0))^, .indent = indent + 1 }
                     );
 
-                for i in 0..List.length(values) do (
-                    let value = values |> List.at(i);
+                for { i, value } in List.iteri(values) do (
+                    if i == 0 then continue;
                     str += ",\n" +
                         StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
                         (PrettyPrinter as ToString).to_string(
@@ -679,8 +695,9 @@ impl PrettyPrinter as ToString = {
                         { .value = first_value, .indent = indent + 1 }
                     );
 
-                for i in 0..List.length(pairs) do (
-                    let { key, value } = List.at(pairs, i)^;
+                for { i, pair } in List.iteri(pairs) do (
+                    if i == 0 then continue;
+                    let { key, value } = pair^;
                     str += ",\n" +
                         StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
                         "\"" +
