@@ -791,10 +791,14 @@ const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_retur
                         | :Number num => arr |> List.push_back(:Number num)
                         | :String str => arr |> List.push_back(:String str)
                         | :ArrayOpen => (
+                            expecting_comma^ = true;
                             # drop `ctx` here
-                            &mut ctxs |> List.push_back(Context.new_array())
+
+                            &mut ctxs |> List.push_back(Context.new_array());
+                            continue
                         )
                         | :ArrayClose => if &arr^ |> List.is_empty then (
+                            expecting_comma^ = true;
                             # drop `ctx` here
 
                             # SAFETY: `list_pop` won't panic because `ctxs` is not empty because
@@ -810,14 +814,18 @@ const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_retur
                                 ctx |> Context.push_value(arr)
                             ) else (
                                 ok(arr);
-                            )
+                            );
+                            continue
                         ) else (
                             error(:ExpectingValue)
                         )
                         | :Comma => error(:EmptyArrayElem)
                         | :ObjectOpen => (
+                            expecting_comma^ = true;
                             # drop `ctx` here
-                            &mut ctxs |> List.push_back(Context.new_object())
+
+                            &mut ctxs |> List.push_back(Context.new_object());
+                            continue
                         )
                         | :ObjectClose => error(:MismatchedObjectClose)
                         | :Colon => error(:UnexpectedColon)
@@ -867,6 +875,7 @@ const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_retur
                             expecting_colon^ = true;
                         )
                         | :ObjectClose => if &obj^ |> List.is_empty then (
+                            expecting_comma^ = true;
                             # drop `ctx` here
 
                             # SAFETY: `list_pop` won't panic because `ctxs` is not empty because
@@ -882,7 +891,8 @@ const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_retur
                                 ctx |> Context.push_value(obj)
                             ) else (
                                 ok(obj);
-                            )
+                            );
+                            continue
                         ) else (
                             error(:ExpectingValue)
                         )
@@ -938,16 +948,26 @@ const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_retur
                             obj |> List.push_back(pair)
                         )
                         | :ArrayOpen => (
+                            let expecting_comma = expecting_colon;
+                            expecting_comma^ = true;
                             # drop `ctx` here
-                            &mut ctxs |> List.push_back(Context.new_array())
+
+                            &mut ctxs |> List.push_back(Context.new_array());
+                            continue
                         )
                         | :ArrayClose => error(:MismatchedArrayClose)
                         | :Comma => error(:EmptyObjectValue)
                         | :ObjectOpen => (
+                            let expecting_comma = expecting_colon;
+                            expecting_comma^ = true;
                             # drop `ctx` here
-                            &mut ctxs |> List.push_back(Context.new_object())
+
+                            &mut ctxs |> List.push_back(Context.new_object());
+                            continue
                         )
                         | :ObjectClose => if &obj^ |> List.is_empty then (
+                            let expecting_comma = expecting_colon;
+                            expecting_comma^ = true;
                             # drop `ctx` here
 
                             # SAFETY: `list_pop` won't panic because `ctxs` is not empty because
@@ -963,7 +983,8 @@ const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_retur
                                 ctx |> Context.push_value(obj)
                             ) else (
                                 ok(obj);
-                            )
+                            );
+                            continue
                         ) else (
                             error(:ExpectingValue)
                         )
