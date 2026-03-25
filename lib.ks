@@ -30,7 +30,7 @@ const CharPlus = (
     );
 
     const parse = [T] (c :: Char) -> T => (
-        String.parse(StringPlus.of_char(c))
+        String.parse[T](StringPlus.of_char(c))
     );
 );
 
