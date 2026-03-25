@@ -5,6 +5,8 @@ use std.*;
 # - a variant of Iterable that can be stopped when you don't want it to iterate any more would be
 #   helpful
 
+const PRETTY_PRINTER_INDENT :: String = "    ";
+
 const CharPlus = (
     module:
 
@@ -66,6 +68,18 @@ const StringPlus = (
     module:
 
     const of_char = (c :: Char) => (Char as ToString).to_string(c);
+
+    const repeat = (self :: String, times :: UInt32) -> String => (
+        let mut new_str = self;
+        if times == 0 then (
+            ""
+        ) else (
+            for _ in 0..(times - 1) do (
+                new_str += self;
+            );
+            new_str
+        )
+    )
 );
 
 const BoolPlus = (
@@ -547,8 +561,13 @@ const Value = newtype (
     | :Object List.t[Pair]
 );
 
-impl Value as ToString = {
-    .to_string = value => match value with (
+const PrettyPrinter = newtype {
+    .value :: Value,
+    .indent :: UInt32,
+};
+
+impl PrettyPrinter as ToString = {
+    .to_string = { .value, .indent } => match value with (
         | :Null => "null"
         | :Bool b => if b then "true" else "false"
         | :Number num => String.to_string(num)
@@ -556,24 +575,51 @@ impl Value as ToString = {
         | :Array ref values => (
             if List.is_empty(values) then "[]"
             else (
-                let mut str = "[" + (Value as ToString).to_string((values |> List.at(0))^);
+                let mut str = "[\n" +
+                    StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
+                    (PrettyPrinter as ToString).to_string(
+                        { .value = (values |> List.at(0))^, .indent = indent + 1 }
+                    );
+
                 for i in 0..List.length(values) do (
                     let value = values |> List.at(i);
-                    str += "," + (Value as ToString).to_string(value^);
+                    str += ",\n" +
+                        StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
+                        (PrettyPrinter as ToString).to_string(
+                            { .value = value^, .indent = indent + 1 }
+                        );
                 );
-                str + "]"
+
+                str + "\n" + StringPlus.repeat(PRETTY_PRINTER_INDENT, indent) + "]"
             )
         )
         | :Object ref pairs => (
             if List.is_empty(pairs) then "{}"
             else (
                 let { first_key, first_value } = List.at(pairs, 0)^;
-                let mut str = "{\"" + first_key + "\":" + (Value as ToString).to_string(first_value);
+
+                let mut str = "{\n" +
+                    StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
+                    "\"" +
+                    first_key +
+                    "\": " +
+                    (PrettyPrinter as ToString).to_string(
+                        { .value = first_value, .indent = indent + 1 }
+                    );
+
                 for i in 0..List.length(pairs) do (
                     let { key, value } = List.at(pairs, i)^;
-                    str += "," + "\"" + key + "\":" + (Value as ToString).to_string(value);
+                    str += ",\n" +
+                        StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
+                        "\"" +
+                        key +
+                        "\": " +
+                        (PrettyPrinter as ToString).to_string(
+                            { .value, .indent = indent + 1 }
+                        );
                 );
-                str + "}"
+
+                str + "\n" + StringPlus.repeat(PRETTY_PRINTER_INDENT, indent) + "}"
             )
         )
     )
@@ -593,6 +639,11 @@ impl Value as module = (
             | _ => :None
         )
     );
+
+    const pretty_printer = (self :: Value) -> PrettyPrinter => {
+        .value = self,
+        .indent = 0,
+    };
 );
 
 const Context = newtype (
