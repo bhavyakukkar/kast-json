@@ -28,6 +28,10 @@ const CharPlus = (
             # C1 control codes
             (c >= (@eval Char.code(DEL)) and c <= (@eval Char.code(APC)))
     );
+
+    const parse = [T] (c :: Char) -> T => (
+        String.parse(StringPlus.of_char(c))
+    );
 );
 
 const Option = (
@@ -409,7 +413,7 @@ impl Reader as module = (
 const Number = newtype {
     .neg :: Bool,
     .digits :: UInt32,
-    .fraction_digits :: Option.t[UInt32],
+    .fraction_digits :: Option.t[Float64],
     .exponent :: Option.t[type {.neg :: Bool, .digits :: UInt32}],
 };
 
@@ -438,15 +442,6 @@ impl Number as module = (
     const next = Reader.next;
 
     const into_f64 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Float64 => (
-        const num_digits = (mut n :: UInt32) => with_return (
-            if n == 0 then return 1;
-            let mut count = 0;
-            while n > 0 do (
-                n = n / 10;
-                count += 1;
-            );
-            count
-        );
         const uint_to_float = (n :: UInt32) => String.parse[Float64](String.to_string(n));
         const pow10 = num => (
             let mut n = 1;
@@ -456,13 +451,7 @@ impl Number as module = (
             n
         );
 
-        let mut f = uint_to_float(digits);
-
-        if fraction_digits |> Option.and_then(
-            num => (num != 0) |> BoolPlus.then_some(num)
-        ) is :Some frac then (
-            f = f + uint_to_float(frac) / pow10(num_digits(frac));
-        );
+        let mut f = uint_to_float(digits) + Option.unwrap_or(fraction_digits, 0.0);
 
         if neg then (
             f = -f;
@@ -486,9 +475,9 @@ impl Number as module = (
         )
     );
 
-    const collect_one_or_more_digits = (reader :: &mut Reader) -> Option.t[UInt32] => with_return (
+    const collect_one_or_more_digits = (reader :: &mut Reader) -> Option.t[UInt32] => (
         peek(&reader^) |>
-            Option.and_then(c => (
+            Option.and_then(c => with_return (
                 if not Char.is_ascii_digit(c) then return :None;
                 next(reader);
 
@@ -539,7 +528,21 @@ impl Number as module = (
         peek(&reader^) |> Option.and_then(c => if c == '.' then (
             next(reader);
 
-            if collect_one_or_more_digits(reader) is :Some num then (
+            let first_digit = peek(&reader^) |>
+                Option.and_then(c => Char.is_ascii_digit(c) |> BoolPlus.then_some(c));
+
+            if first_digit is :Some first_digit then (
+                next(reader);
+
+                let mut num = CharPlus.parse[Float64](first_digit);
+                num = num / 10;
+                let mut i = 100.0;
+                while peek(&reader^) is :Some c do (
+                    if not Char.is_ascii_digit(c) then break;
+                    next(reader);
+                    num = num + (CharPlus.parse[Float64](c) / i);
+                    i *= 10;
+                );
                 :Some num
             ) else (
                 (@current error)(:NoDigitsAfterDecimal)
