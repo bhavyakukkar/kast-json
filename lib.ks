@@ -547,8 +547,8 @@ const Value = newtype (
     | :Object List.t[Pair]
 );
 
-impl type (&Value) as ToString = {
-    .to_string = value => match value^ with (
+impl Value as ToString = {
+    .to_string = value => match value with (
         | :Null => "null"
         | :Bool b => if b then "true" else "false"
         | :Number num => String.to_string(num)
@@ -556,10 +556,10 @@ impl type (&Value) as ToString = {
         | :Array ref values => (
             if List.is_empty(values) then "[]"
             else (
-                let mut str = "[" + (type (&Value) as ToString).to_string(values |> List.at(0));
+                let mut str = "[" + (Value as ToString).to_string((values |> List.at(0))^);
                 for i in 0..List.length(values) do (
                     let value = values |> List.at(i);
-                    str += "," + (type (&Value) as ToString).to_string(value);
+                    str += "," + (Value as ToString).to_string(value^);
                 );
                 str + "]"
             )
@@ -568,10 +568,10 @@ impl type (&Value) as ToString = {
             if List.is_empty(pairs) then "{}"
             else (
                 let { first_key, first_value } = List.at(pairs, 0)^;
-                let mut str = "{\"" + first_key + "\":" + (type (&Value) as ToString).to_string(&first_value);
+                let mut str = "{\"" + first_key + "\":" + (Value as ToString).to_string(first_value);
                 for i in 0..List.length(pairs) do (
                     let { key, value } = List.at(pairs, i)^;
-                    str += "," + "\"" + key + "\":" + (type (&Value) as ToString).to_string(&value);
+                    str += "," + "\"" + key + "\":" + (Value as ToString).to_string(value);
                 );
                 str + "}"
             )
