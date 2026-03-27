@@ -480,7 +480,7 @@ impl Value as ToString = {
         | :Null => "null"
         | :Bool b => if b then "true" else "false"
         | :Number num => String.to_string(num)
-        | :String str => "\"" + str + "\""
+        | :String str => String.escape(str)
         | :Array ref values => (
             if List.is_empty(values) then "[]"
             else (
@@ -518,7 +518,7 @@ impl PrettyPrinter as ToString = {
         | :Null => "null"
         | :Bool b => if b then "true" else "false"
         | :Number num => String.to_string(num)
-        | :String str => "\"" + str + "\""
+        | :String str => String.escape(str)
         | :Array ref values => (
             if List.is_empty(values) then "[]"
             else (
