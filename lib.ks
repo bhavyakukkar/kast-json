@@ -474,12 +474,40 @@ const Value = newtype (
     | :Object List.t[Pair]
 );
 
+const escape_json_string = (s :: String) -> String => (
+    let mut new = "\"";
+    for c in String.iter(s) do (
+        if c == '"' then (
+            new += "\\\"";
+        ) else if c == '\\' then (
+            new += "\\";
+        ) else if c == '/' then (
+            new += "/";
+        ) else if c == '\b' then (
+            new += "\\b";
+        ) else if c == '\f' then (
+            new += "\\f";
+        ) else if c == '\n' then (
+            new += "\\n";
+        ) else if c == '\r' then (
+            new += "\\r";
+        ) else if c == '\t' then (
+            new += "\\t";
+        ) else if CharPlus.is_control(&c) then (
+            panic("unreachable");
+        ) else (
+            new += StringPlus.of_char(c);
+        )
+    );
+    new + "\""
+);
+
 impl Value as ToString = {
     .to_string = value => match value with (
         | :Null => "null"
         | :Bool b => if b then "true" else "false"
         | :Number num => String.to_string(num)
-        | :String str => String.escape(str)
+        | :String str => escape_json_string(str)
         | :Array ref values => (
             if List.is_empty(values) then "[]"
             else (
@@ -517,7 +545,7 @@ impl PrettyPrinter as ToString = {
         | :Null => "null"
         | :Bool b => if b then "true" else "false"
         | :Number num => String.to_string(num)
-        | :String str => String.escape(str)
+        | :String str => escape_json_string(str)
         | :Array ref values => (
             if List.is_empty(values) then "[]"
             else (
