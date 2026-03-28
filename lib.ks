@@ -10,7 +10,7 @@ use (include "stdplus.ks").*;
 
 const PRETTY_PRINTER_INDENT :: String = "    ";
 
-
+## non-exhaustive
 const Error = newtype (
     | :ImmediateEOF
     | :UnexpectedEOF
@@ -36,6 +36,7 @@ const Error = newtype (
     | :EmptyObjectValue
     | :EmptyObjectPair
     | :MissingPairValue
+    | :TrailingChars
 );
 
 const is_json_whitespace = (c :: &Char) -> Bool => (
@@ -941,6 +942,17 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
     panic("unreachable")
 );
 
+## parse the source-string as an individual JSON value
+const parse_one_total = (source :: &String) -> Result.t[Value, ErrorPos] => with_return (
+    let mut reader = Reader.create(source);
+    parse_one(&mut reader) |> Result.and_then(value => (
+        Reader.discard_ws(&mut reader);
+        if Reader.peek(&reader) |> Option.is_some_and(c => not is_json_whitespace(&c))
+        then :Error { .err = :TrailingChars, .pos = reader.pos }
+        else :Ok value
+    ))
+);
+
 );
 
 # Public API
@@ -956,4 +968,5 @@ const Pair = __private__.Pair;
 const Value = __private__.Value;
 const PrettyPrinter = __private__.PrettyPrinter;
 const parse_one = __private__.parse_one;
-const parse = __private__.parse_one; # for backwards compatibility)
+const parse = __private__.parse_one; # for backwards compatibility
+const parse_one_total = __private__.parse_one_total;)
