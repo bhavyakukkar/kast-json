@@ -500,8 +500,14 @@ const escape_json_string = (s :: String) -> String => (
             new += "\\r";
         ) else if c == '\t' then (
             new += "\\t";
-        ) else if CharPlus.is_control(&c) then (
-            panic("unreachable");
+        )
+        # control-characters can only be represented via unicode notation (`\uxxxx`)
+        else if CharPlus.is_control(&c) then (
+            const pad_four_char_code = (c :: Char) => (
+                let s = "000" + (Char.code(c) |> String.to_string);
+                s |> String.substring(String.length(s) - 4, 4)
+            );
+            new += "\\u" + pad_four_char_code(c);
         ) else (
             new += StringPlus.of_char(c);
         )
