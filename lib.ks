@@ -351,11 +351,13 @@ impl Number as module = (
     # returns :None if this doesn't resemble a number
     const parse_negativeness = (reader :: &mut Reader) -> Option.t[Bool] => (
         peek(&reader^) |>
-            Option.map(c => if c == '-' then (
+            Option.and_then(c => if c == '-' then (
                 next(reader);
-                true
+                :Some true
+            ) else if Char.is_ascii_digit(c) then (
+                :Some false
             ) else (
-                false
+                :None
             ))
     );
 
