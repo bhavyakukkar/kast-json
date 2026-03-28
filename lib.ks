@@ -132,8 +132,12 @@ impl Reader as module = (
 
             let next_hex_digit = (reader :: &mut Reader) -> Option[UInt32] => (
                 next(reader) |>
-                    and_then(c => Char.is_ascii_alphanumeric(c) |> BoolPlus.then_some(
-                        Char.to_digit_radix(c, 16)
+                    and_then(c => unwindable hex_digit (
+                        with PanicHandler = {
+                            .handle = [T] _ => unwind hex_digit :None,
+                        };
+                        # `to_digit_radix` panics for invalid digits
+                        :Some Char.to_digit_radix(c, 16)
                     ))
             );
 
@@ -176,6 +180,7 @@ impl Reader as module = (
                         else if esc == 't' then '\t'
                         else if esc == 'u' then (
                             consume_next = 0;
+                            next(reader);
                             parse_unicode(reader)
                         )
                         else (@current error)(:InvalidEsc)
