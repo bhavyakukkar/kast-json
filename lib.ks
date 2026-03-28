@@ -170,8 +170,7 @@ impl Reader as module = (
                             esc
                         )
                         else if esc == 'b' then '\b'
-                        # TODO: Kast doesn't support this escape (\f - formfeed)
-                        # else if esc == 'f' then '\f'
+                        else if esc == 'f' then '\f'
                         else if esc == 'n' then '\n'
                         else if esc == 'r' then '\r'
                         else if esc == 't' then '\t'
