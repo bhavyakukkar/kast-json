@@ -285,7 +285,9 @@ impl Number as ToString = {
         );
         s += String.to_string(digits);
         if fraction_digits is :Some digits then (
-            s += "." + String.to_string(digits);
+            let float_s = String.to_string(digits);
+            s += "." +
+                String.substring(float_s, 2, String.length(float_s) - 2); # remove leading `0.`
         );
         if exponent is :Some { .neg, .digits } then (
             s += "e" + (if neg then "-" else "+") + String.to_string(digits);
