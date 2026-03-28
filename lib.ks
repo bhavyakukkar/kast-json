@@ -272,9 +272,9 @@ impl Reader as module = (
 
 const Number = newtype {
     .neg :: Bool,
-    .digits :: UInt32,
-    .fraction_digits :: Option.t[Float64],
-    .exponent :: Option.t[type {.neg :: Bool, .digits :: UInt32}],
+    .digits :: String,
+    .fraction_digits :: String, # empty string === no fractional part
+    .exponent :: {.neg :: Bool, .digits :: String}, # empty `.digits` string === no exponent part
 };
 
 impl Number as ToString = {
@@ -283,14 +283,12 @@ impl Number as ToString = {
         if neg then (
             s += "-";
         );
-        s += String.to_string(digits);
-        if fraction_digits is :Some digits then (
-            let float_s = String.to_string(digits);
-            s += "." +
-                String.substring(float_s, 2, String.length(float_s) - 2); # remove leading `0.`
+        s += digits;
+        if not (fraction_digits |> StringPlus.is_empty) then (
+            s += "." + fraction_digits;
         );
-        if exponent is :Some { .neg, .digits } then (
-            s += "e" + (if neg then "-" else "+") + String.to_string(digits);
+        if not (exponent.digits |> StringPlus.is_empty) then (
+            s += "E" + (if exponent.neg then "-" else "+") + exponent.digits;
         );
         s
     )
@@ -304,125 +302,103 @@ impl Number as module = (
     const next = Reader.next;
 
     const into_f64 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Float64 => (
-        const uint_to_float = (n :: UInt32) => String.parse[Float64](String.to_string(n));
-        const pow10 = num => (
-            let mut n = 1;
-            for i in 0..num do (
-                n = n*10;
-            );
-            n
+        # consider digits
+        let mut f = 0;
+        for c in digits |> String.iter do (
+            f = f*10.0 + CharPlus.parse[Float64](c);
         );
 
-        let mut f = uint_to_float(digits) + Option.unwrap_or(fraction_digits, 0.0);
+        # consider fraction-digits
+        let mut mult = 0.1;
+        for c in fraction_digits |> String.iter do (
+            f += CharPlus.parse[Float64](c) * mult;
+            mult *= 0.1;
+        );
 
+        # consider sign
         if neg then (
             f = -f;
         );
 
-        if exponent |> Option.and_then(
-            exponent => (exponent.digits != 0) |> BoolPlus.then_some(exponent)
-        ) is :Some { .neg, .digits } then (
-            let factor = pow10(digits);
-            f = f * (if neg then (1.0 / factor) else factor);
+        if not (exponent.digits |> StringPlus.is_empty) then (
+            # consider exponent
+            let exp = String.parse[UInt32](exponent.digits);
+            for i in 0..exp do (
+                f *= if exponent.neg then 0.1 else 10;
+            )
         );
+        
         f
     );
 
-    const collect_zero_or_more_digits = (reader :: &mut Reader, num :: &mut UInt32) => (
-        while peek(&reader^) is :Some c do (
-            if not Char.is_ascii_digit(c) then break;
+    ## returns the first character of the JSON number if the reader is in-fact pointing at a JSON number
+    const begin_json_number = (reader :: &Reader) -> Option.t[Char] => (
+        peek(&reader^) |> Option.and_then(c => (c == '-' or Char.is_ascii_digit(c)) |> BoolPlus.then_some(c))
+    );
+
+    ## parse whether the JSON number is negative, based on whether the provided first-character is a minus (`-`)
+    ##
+    ## NOTE: expects that the reader is already pointing at a JSON number i.e. `Number.is_number(&reader)` is true
+    const parse_negativeness = (first_char :: Char, reader :: &mut Reader) -> Bool => (
+        if first_char == '-' then (
             next(reader);
-            let digit = Char.to_digit(c);
-            num^ = num^*10 + digit;
+            true
+        ) else (
+            false
         )
     );
 
-    const collect_one_or_more_digits = (reader :: &mut Reader) -> Option.t[UInt32] => (
-        peek(&reader^) |>
-            Option.and_then(c => with_return (
-                if not Char.is_ascii_digit(c) then return :None;
-                next(reader);
+    ## parse the digits part of the JSON number
+    const parse_digits = (reader :: &mut Reader) -> String => (
+        let error = @current error;
 
-                let mut num = Char.to_digit(c);
-                collect_zero_or_more_digits(reader, &mut num);
-                :Some num
-            ))
-    );
+        let first_digit = next(reader)
+            |> Option.and_then(c => c |> Char.is_ascii_digit |> BoolPlus.then_some(c))
+            |> Option.unwrap_or_else(() => error(:MissingDigitsPart));
 
-    # parse whether the JSON number is negative (has a leading `-`)
-    # returns :None if this doesn't resemble a number
-    const parse_negativeness = (reader :: &mut Reader) -> Option.t[Bool] => (
-        peek(&reader^) |>
-            Option.and_then(c => if c == '-' then (
-                next(reader);
-                :Some true
-            ) else if Char.is_ascii_digit(c) then (
-                :Some false
+        if first_digit == '0' then (
+            if peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) then (
+                error(:LeadingZero)
             ) else (
-                :None
-            ))
-    );
-
-    # parse the digits part of the JSON number
-    # returns :None if this doesn't resemble a number
-    const parse_digits = (reader :: &mut Reader) -> Option.t[UInt32] => (
-        peek(&reader^) |>
-            Option.and_then(c => with_return (
-                if not Char.is_ascii_digit(c) then return :None;
-                next(reader);
-                let mut num = Char.to_digit(c);
-
-                :Some (
-                    if num == 0 then (
-                        if peek(&reader^) is :Some c then (
-                            if Char.is_ascii_digit(c) then (@current error)(:LeadingZero);
-                        );
-                        0
-                    ) else (
-                        collect_zero_or_more_digits(reader, &mut num);
-                        num
-                    )
-                )
-            ))
-    );
-
-    # parse the fractional part of the JSON number
-    # returns :None if there is no fractional part present (no '.')
-    const parse_fractional = (reader :: &mut Reader) -> typeof ((_ :: Number).fraction_digits) => (
-        peek(&reader^) |> Option.and_then(c => if c == '.' then (
-            next(reader);
-
-            let first_digit = peek(&reader^) |>
-                Option.and_then(c => Char.is_ascii_digit(c) |> BoolPlus.then_some(c));
-
-            if first_digit is :Some first_digit then (
-                next(reader);
-
-                let mut num = CharPlus.parse[Float64](first_digit);
-                num = num / 10;
-                let mut i = 100.0;
-                while peek(&reader^) is :Some c do (
-                    if not Char.is_ascii_digit(c) then break;
-                    next(reader);
-                    num = num + (CharPlus.parse[Float64](c) / i);
-                    i *= 10;
-                );
-                :Some num
-            ) else (
-                (@current error)(:NoDigitsAfterDecimal)
+                "0"
             )
         ) else (
-            :None
-        ))
+            let mut digits = StringPlus.of_char(first_digit);
+        
+            while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
+                digits += next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char;
+            );
+
+            digits
+        )
     );
 
-    # parse the exponent part of the JSON number
-    # returns :None if there is no exponent part present (no 'e' or 'E')
-    const parse_exponent = (reader :: &mut Reader) -> typeof ((_ :: Number).exponent) => (
-        peek(&reader^) |> Option.and_then(c => if c == 'e' or c == 'E' then (
+    # parse the optional fractional part of the JSON number
+    const parse_fractional = (reader :: &mut Reader) -> typeof ((_ :: Number).fraction_digits) => (
+        if peek(&reader^) |> Option.is_some_and(c => c == '.') then (
             next(reader);
 
-            let is_neg = match peek(&reader^) with (
+            let mut digits = next(reader)
+                |> Option.and_then(c => c |> Char.is_ascii_digit |> BoolPlus.then_some(c))
+                |> Option.unwrap_or_else(() => (@current error)(:NoDigitsAfterDecimal))
+                |> StringPlus.of_char;
+
+            while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
+                digits += next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char;
+            );
+
+            digits
+        ) else (
+            ""
+        )
+    );
+
+    # parse the optional exponent part of the JSON number
+    const parse_exponent = (reader :: &mut Reader) -> typeof ((_ :: Number).exponent) => (
+        if peek(&reader^) |> Option.is_some_and(c => c == 'e' or c == 'E') then (
+            next(reader);
+
+            let neg = match peek(&reader^) with (
                 | :Some c => (
                     if c == '-' then (
                         next(reader);
@@ -437,36 +413,29 @@ impl Number as module = (
                 | :None => false
             );
 
-            if collect_one_or_more_digits(reader) is :Some num then (
-                :Some { .neg = is_neg, .digits = num }
-            ) else (
-                (@current error)(:NoDigitsAfterExp)
-            )
+            let mut digits = next(reader)
+                |> Option.and_then(c => c |> Char.is_ascii_digit |> BoolPlus.then_some(c))
+                |> Option.unwrap_or_else(() => (@current error)(:NoDigitsAfterExp))
+                |> StringPlus.of_char;
+
+            while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
+                digits += next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char;
+            );
+
+            { .neg, .digits }
         ) else (
-            :None
-        ))
+            { .neg = default(), .digits = "" }
+        )
     );
 
-    # parse a single `Number` from a `lib.Reader`
-    # can unwind to block `next_token` with value `:Error (e :: Error) :: Result.t[Token, Error]`
+    # parse a JSON number, or return :None if the incoming form doesn't resemble a JSON number
     const parse = (reader :: &mut Reader) -> Option.t[Number] => (
-        use Option.*;
-
-        parse_negativeness(reader) |> map(neg => (
-            parse_digits(reader) |> map_or_else(
-                () => (@current error)(:MissingDigitsPart),
-                digits => (
-                    let fraction_digits = parse_fractional(reader);
-                    let exponent = parse_exponent(reader);
-                    {
-                        .neg,
-                        .digits,
-                        .fraction_digits,
-                        .exponent,
-                    }
-                )
-            )
-        ))
+        begin_json_number(&reader^) |> Option.map(first_char => {
+            .neg = parse_negativeness(first_char, reader),
+            .digits = parse_digits(reader),
+            .fraction_digits = parse_fractional(reader),
+            .exponent = parse_exponent(reader),
+        })
     );
 );
 

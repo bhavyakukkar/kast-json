@@ -76,7 +76,9 @@ const StringPlus = (
             );
             new_str
         )
-    )
+    );
+
+    const is_empty = (s :: String) => String.length(s) == 0;
 );
 
 const BoolPlus = (
@@ -146,4 +148,12 @@ const Tup = (
     const fst = [T] (tup :: {T, T}) -> T => tup.0;
 );
 
+const Default = [Self] newtype {
+    .default :: () -> Self,
+};
 
+const default = [T] () -> T => (T as Default).default();
+
+impl Bool as Default = {
+    .default = () => true,
+};
