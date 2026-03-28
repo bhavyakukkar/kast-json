@@ -536,11 +536,17 @@ impl Value as ToString = {
             if List.is_empty(pairs) then "{}"
             else (
                 let { first_key, first_value } = List.at(pairs, 0)^;
-                let mut str = "{\"" + first_key + "\":" + (Value as ToString).to_string(first_value);
+                let mut str = "{" +
+                    escape_json_string(first_key) +
+                    ":" +
+                    (Value as ToString).to_string(first_value);
                 for { i, pair } in List.iteri(pairs) do (
                     if i == 0 then continue;
                     let { key, value } = pair^;
-                    str += "," + "\"" + key + "\":" + (Value as ToString).to_string(value);
+                    str += "," +
+                        escape_json_string(key) +
+                        ":" +
+                        (Value as ToString).to_string(value);
                 );
                 str + "}"
             )
@@ -587,9 +593,8 @@ impl PrettyPrinter as ToString = {
 
                 let mut str = "{\n" +
                     StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
-                    "\"" +
-                    first_key +
-                    "\": " +
+                    escape_json_string(first_key) +
+                    ": " +
                     (PrettyPrinter as ToString).to_string(
                         { .value = first_value, .indent = indent + 1 }
                     );
@@ -599,9 +604,8 @@ impl PrettyPrinter as ToString = {
                     let { key, value } = pair^;
                     str += ",\n" +
                         StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
-                        "\"" +
-                        key +
-                        "\": " +
+                        escape_json_string(key) +
+                        ": " +
                         (PrettyPrinter as ToString).to_string(
                             { .value, .indent = indent + 1 }
                         );
