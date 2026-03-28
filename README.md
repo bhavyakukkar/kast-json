@@ -1,9 +1,9 @@
-## CLI
+## Use as pretty-printer
 ```console
-$ kast run main.ks test.json
+$ kast run pp.ks test.json
 ```
 
-## Library
+## Use as library
 ```nim
 const json = import "lib.ks";
 
@@ -13,4 +13,11 @@ match json.parse(&mut reader) with (
     | :Ok value => value |> json.Value.pretty_printer |> String.to_string |> std.io.print
     | :Error err => err |> dbg.print
 );
+# [
+#     {
+#         "some": "json",
+#         "": true
+#     },
+#     {}
+# ]
 ```

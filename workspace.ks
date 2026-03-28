@@ -1,5 +1,5 @@
 {
     .roots = {
-        "main.ks"
+        "pp.ks"
     }
 }
