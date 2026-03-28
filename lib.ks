@@ -487,7 +487,7 @@ const escape_json_string = (s :: String) -> String => (
         if c == '"' then (
             new += "\\\"";
         ) else if c == '\\' then (
-            new += "\\";
+            new += "\\\\";
         ) else if c == '/' then (
             new += "/";
         ) else if c == '\b' then (
