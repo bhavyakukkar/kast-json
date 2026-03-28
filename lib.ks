@@ -1,4 +1,6 @@
+const __private__ = (
 module:
+
 use std.*;
 use (include "stdplus.ks").*;
 
@@ -126,7 +128,7 @@ impl Reader as module = (
     const Str = (
         module:
 
-        # parse 4 hex digits, used for unicode escapes in string literals
+        ## parse 4 hex digits as a codepoint, used for unicode escapes in string literals
         const parse_unicode = (reader :: &mut Reader) -> Char => (
             use Option.*;
 
@@ -155,8 +157,7 @@ impl Reader as module = (
             )
         );
 
-        # parses a string literal excluding the enclosing double-quotes
-        # can unwind to block `next_token` with value `:Error (e :: Error) :: Result.t[Token, Error]`
+        ## parse contents of a string literal (excluding the enclosing double-quotes)
         const parse = (reader :: &mut Reader) -> String => with_return (
             let mut str = "";
 
@@ -301,6 +302,7 @@ impl Number as module = (
 
     const next = Reader.next;
 
+    ## convert (losslessly but without failure) a JSON number to a Float64
     const into_f64 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Float64 => (
         # consider digits
         let mut f = 0;
@@ -373,7 +375,7 @@ impl Number as module = (
         )
     );
 
-    # parse the optional fractional part of the JSON number
+    ## parse the optional fractional part of the JSON number
     const parse_fractional = (reader :: &mut Reader) -> typeof ((_ :: Number).fraction_digits) => (
         if peek(&reader^) |> Option.is_some_and(c => c == '.') then (
             next(reader);
@@ -393,7 +395,7 @@ impl Number as module = (
         )
     );
 
-    # parse the optional exponent part of the JSON number
+    ## parse the optional exponent part of the JSON number
     const parse_exponent = (reader :: &mut Reader) -> typeof ((_ :: Number).exponent) => (
         if peek(&reader^) |> Option.is_some_and(c => c == 'e' or c == 'E') then (
             next(reader);
@@ -428,7 +430,7 @@ impl Number as module = (
         )
     );
 
-    # parse a JSON number, or return :None if the incoming form doesn't resemble a JSON number
+    ## parse a JSON number, or return :None if the incoming form doesn't resemble a JSON number
     const parse = (reader :: &mut Reader) -> Option.t[Number] => (
         begin_json_number(&reader^) |> Option.map(first_char => {
             .neg = parse_negativeness(first_char, reader),
@@ -591,24 +593,14 @@ impl PrettyPrinter as ToString = {
 impl Value as module = (
     module:
 
-    # if token is equivalent to a value (primitives null, bool, string, num), construct equivalent
-    # value, else :None
-    const from_value = (token :: Token) -> Option.t[Value] => (
-        match token with (
-            | :Null => :Some :Null
-            | :Bool b => :Some :Bool b
-            | :Number num => :Some :Number num
-            | :String str => :Some :String str
-            | _ => :None
-        )
-    );
-
+    ## create a JSON pretty-printer of this value
     const pretty_printer = (self :: Value) -> PrettyPrinter => {
         .value = self,
         .indent = 0,
     };
 );
 
+# private
 const Context = newtype (
     | :Array {
         List.t[Value],
@@ -621,6 +613,7 @@ const Context = newtype (
     }
 );
 
+# private
 impl Context as module = (
     module:
 
@@ -674,7 +667,8 @@ impl Context as module = (
     );
 );
 
-const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_return (
+## parse one JSON value from the reader
+const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_return (
     let ok = val => return :Ok val;
     let error = err => return :Error { .err, .pos = reader^.pos };
 
@@ -946,3 +940,20 @@ const parse = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_retur
     );
     panic("unreachable")
 );
+
+);
+
+# Public API
+(module:
+
+const Error = __private__.Error;
+const Pos = __private__.Pos;
+const ErrorPos = __private__.ErrorPos;
+const Token = __private__.Token;
+const Reader = __private__.Reader;
+const Number = __private__.Number;
+const Pair = __private__.Pair;
+const Value = __private__.Value;
+const PrettyPrinter = __private__.PrettyPrinter;
+const parse_one = __private__.parse_one;
+const parse = __private__.parse_one; # for backwards compatibility)
