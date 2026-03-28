@@ -6,8 +6,8 @@ const main = () => (
         std.sys.exit(1);
     );
     let file = std.fs.read_file(std.sys.argv_at(1));
-    let mut reader = json.Reader.create(&file);
-    match json.parse(&mut reader) with (
+
+    match json.parse_one_total(&file) with (
         | :Ok value => value |> json.Value.pretty_printer |> String.to_string |> std.io.print
         | :Error { .err, .pos } => (
             std.io.eprint("Error at " + String.to_string(pos));
