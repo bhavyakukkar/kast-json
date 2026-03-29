@@ -15,12 +15,11 @@ const Error = newtype (
     | :ImmediateEOF
     | :UnexpectedEOF
     | :UnknownForm
-    # Number errors
     | :LeadingZero
     | :NoDigitsAfterDecimal
     | :NoDigitsAfterExp
-    | :MissingDigitsPart # character following `-` in a JSON Number must be a digit
-    | :InvalidChar # control character in string
+    | :MissingDigitsPart
+    | :InvalidChar
     | :InvalidUnicode
     | :InvalidEsc
     | :MismatchedArrayClose
@@ -32,12 +31,45 @@ const Error = newtype (
     | :UnexpectedColon
     | :ExpectingColon
     | :ExpectingValue
+    | :TrailingCommaInArray
+    | :TrailingCommaInObject
     | :EmptyObjectKey
     | :EmptyObjectValue
     | :EmptyObjectPair
     | :MissingPairValue
     | :TrailingChars
 );
+
+impl Error as ToString = {
+    .to_string = err => match err with (
+        | :ImmediateEOF => "unexpected end-of-file"
+        | :UnexpectedEOF => "unexpected end-of-file"
+        | :UnknownForm => "unknown form: neither null|true|false|number|string|array|object"
+        | :LeadingZero => "leading zeroes in numbers are not allowed"
+        | :NoDigitsAfterDecimal => "no digits found after decimal point in number"
+        | :NoDigitsAfterExp => "no digits found after exponent symbol `e` in number"
+        | :MissingDigitsPart => "no digit found after minus `-` in number"
+        | :InvalidChar => "control characters are not allowed"
+        | :InvalidUnicode => "invalid unicode sequence"
+        | :InvalidEsc => "invalid escape sequence"
+        | :MismatchedArrayClose => "unexpected array close character `]` found"
+        | :UnexpectedComma => "unexpected comma found"
+        | :ExpectingComma => "expected comma was not found"
+        | :EmptyArrayElem => "array elements may not be empty"
+        | :NonStrObjectKey => "object keys must be json strings"
+        | :MismatchedObjectClose => "unexpected object close character `}` found"
+        | :UnexpectedColon => "unexpected colon found"
+        | :ExpectingColon => "expected colon was not found"
+        | :ExpectingValue => "expecting value after colon in object"
+        | :TrailingCommaInArray => "trailing commas are not allowed in arrays"
+        | :TrailingCommaInObject => "trailing commas are not allowed in objects"
+        | :EmptyObjectKey => "skipping object keys is not allowed"
+        | :EmptyObjectValue => "skipping object values is not allowed"
+        | :EmptyObjectPair => "object pairs may not be empty"
+        | :MissingPairValue => "missing object value before closing object"
+        | :TrailingChars => "trailing characters found after value"
+    )
+};
 
 const is_json_whitespace = (c :: &Char) -> Bool => (
     c^ == ' ' or c^ == '\n' or c^ == '\r' or c^ == '\t'
@@ -743,7 +775,7 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             );
                             continue
                         ) else (
-                            error(:ExpectingValue)
+                            error(:TrailingCommaInArray)
                         )
                         | :Comma => error(:EmptyArrayElem)
                         | :ObjectOpen => (
@@ -820,7 +852,7 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             );
                             continue
                         ) else (
-                            error(:ExpectingValue)
+                            error(:TrailingCommaInObject)
                         )
                         | :Comma => error(:EmptyObjectPair)
                         | :ArrayClose => error(:MismatchedArrayClose)

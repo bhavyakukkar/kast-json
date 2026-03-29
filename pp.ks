@@ -14,8 +14,10 @@ const main = () => (
     match parse_one_total(&file) with (
         | :Ok value => value |> Value.pretty_printer |> String.to_string |> std.io.print
         | :Error { .err, .pos } => (
-            std.io.eprint("Error at " + String.to_string(pos));
-            dbg.print(err);
+            std.io.eprint("Error at "
+                + String.to_string(pos)
+                + ":\n"
+                + String.to_string(err));
         )
     );
 );
