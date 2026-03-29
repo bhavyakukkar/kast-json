@@ -79,6 +79,15 @@ const StringPlus = (
     );
 
     const is_empty = (s :: String) => String.length(s) == 0;
+
+    const index_of_pred = (s :: String, predicate :: Char -> Bool) -> Int32 => with_return (
+        for { i, c_at_i } in String.iteri(s) do (
+            if predicate(c_at_i) then (
+                return i;
+            );
+        );
+        -1
+    );
 );
 
 const BoolPlus = (
@@ -140,6 +149,15 @@ const List = (
     );
 
     const is_empty = [T] (list :: &t[T]) -> Bool => length(list) == 0;
+
+    const find_map = [T, U] (list :: &t[T], f :: type (&T) -> Option.t[U]) -> Option.t[U] => with_return (
+        for item in iter(list) do (
+            if f(item) is :Some u then (
+                return :Some u
+            );
+        );
+        :None
+    );
 );
 
 const Tup = (

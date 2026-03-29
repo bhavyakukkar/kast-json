@@ -366,6 +366,26 @@ impl Number as module = (
         f
     );
 
+    const try_u32 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Result.t[UInt32, String] => (
+        if neg then (
+            :Error "Negative JSON number cannot be converted to UInt32"
+        )
+        else if String.length(fraction_digits) > 0 then (
+            :Error "JSON number with fractional part cannot be converted to UInt32"
+        )
+        else if String.length(exponent.digits) > 0 then (
+            :Error "JSON number with exponent part cannot be converted to UInt32"
+        )
+        else (
+            unwindable parse_uint32 (
+                with PanicHandler = {
+                    .handle = [T] msg => unwind parse_uint32 :Error msg,
+                };
+                :Ok String.parse[UInt32](digits)
+            )
+        )
+    );
+
     ## returns the first character of the JSON number if the reader is in-fact pointing at a JSON number
     const begin_json_number = (reader :: &Reader) -> Option.t[Char] => (
         peek(&reader^) |> Option.and_then(c => (c == '-' or Char.is_ascii_digit(c)) |> BoolPlus.then_some(c))
