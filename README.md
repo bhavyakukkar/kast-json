@@ -1,6 +1,8 @@
 ## Use as pretty-printer
-```console
+```sh
 $ kast run pp.ks test.json
+# or, from stdin
+$ kast run pp.ks -
 ```
 
 ## Use as library
