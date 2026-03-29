@@ -1021,7 +1021,7 @@ use __private__.Pair;
 use __private__.Value;
 use __private__.PrettyPrinter;
 use __private__.parse_one;
-use __private__.parse_one; # for backwards compatibility
+const parse = __private__.parse_one; # for backwards compatibility
 use __private__.parse_one_total;
 use __private__.escape_json_string;
 use __private__.error;

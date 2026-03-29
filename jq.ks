@@ -17,7 +17,7 @@ const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => wit
         return
     );
 
-    let sub_query = parse_one(reader) |> Result.unwrap_or_else({ .err, ... } => match err with (
+    let sub_query = parse(reader) |> Result.unwrap_or_else({ .err, ... } => match err with (
         | :ImmediateEOF => (
             # query finished -> print resulting json
             json^ |> Value.pretty_printer |> String.to_string |> std.io.print;
