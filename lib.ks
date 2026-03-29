@@ -956,17 +956,21 @@ const parse_one_total = (source :: &String) -> Result.t[Value, ErrorPos] => with
 );
 
 # Public API
-(module:
+(
+module:
 
-const Error = __private__.Error;
-const Pos = __private__.Pos;
-const ErrorPos = __private__.ErrorPos;
-const Token = __private__.Token;
-const Reader = __private__.Reader;
-const Number = __private__.Number;
-const Pair = __private__.Pair;
-const Value = __private__.Value;
-const PrettyPrinter = __private__.PrettyPrinter;
-const parse_one = __private__.parse_one;
-const parse = __private__.parse_one; # for backwards compatibility
-const parse_one_total = __private__.parse_one_total;)
+use __private__.Error;
+use __private__.Pos;
+use __private__.ErrorPos;
+use __private__.Token;
+use __private__.Reader;
+use __private__.Number;
+use __private__.Pair;
+use __private__.Value;
+use __private__.PrettyPrinter;
+use __private__.parse_one;
+use __private__.parse_one; # for backwards compatibility
+use __private__.parse_one_total;
+use __private__.escape_json_string;
+use __private__.error;
+)
