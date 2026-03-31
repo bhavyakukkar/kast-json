@@ -88,6 +88,14 @@ const StringPlus = (
         );
         -1
     );
+
+    const rev = (s :: String) -> String => with_return (
+        let mut new = "";
+        for i in 0..String.length(s) do (
+            new += s |> String.at(String.length(s) - i - 1) |> of_char;
+        );
+        new
+    )
 );
 
 const BoolPlus = (

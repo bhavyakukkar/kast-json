@@ -328,6 +328,23 @@ impl Number as ToString = {
     )
 };
 
+impl UInt32 as Into[Number] = {
+    .into = mut num => (
+        let mut digits = "";
+        while num > 0 do (
+            digits += num % 10 |> Char.from_digit |> StringPlus.of_char;
+            num = num / 10;
+        );
+        digits = StringPlus.rev(digits);
+        {
+            .digits,
+            .neg = false,
+            .fraction_digits = "",
+            .exponent = { .neg = default(), .digits = "" }
+        }
+    ),
+};
+
 impl Number as module = (
     module:
 
