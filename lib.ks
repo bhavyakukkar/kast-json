@@ -108,7 +108,7 @@ const Reader = newtype {
     .pos :: Pos,
 };
 
-const RaiseError = type ([T :: Type] Error -> T);
+const RaiseError = type (Error -> Never);
 const error = @context RaiseError;
 
 impl Reader as module = (
@@ -169,7 +169,7 @@ impl Reader as module = (
                 next(reader) |>
                     and_then(c => unwindable hex_digit (
                         with PanicHandler = {
-                            .handle = [T] _ => unwind hex_digit :None,
+                            .handle = _ => unwind hex_digit :None,
                         };
                         # `to_digit_radix` panics for invalid digits
                         :Some Char.to_digit_radix(c, 16)
@@ -186,7 +186,9 @@ impl Reader as module = (
                     c * 16 +
                     d
                 )))))),
-                () => (@current error)(:InvalidUnicode)
+                () => (
+                    (@current error)(:InvalidUnicode) |> from_never
+                )
             )
         );
 
@@ -217,9 +219,11 @@ impl Reader as module = (
                             next(reader);
                             parse_unicode(reader)
                         )
-                        else (@current error)(:InvalidEsc)
+                        else (
+                            (@current error)(:InvalidEsc) |> from_never
+                        )
                     ) else (
-                        (@current error)(:UnexpectedEOF)
+                        (@current error)(:UnexpectedEOF) |> from_never
                     );
                     for _ in 0..consume_next do next(reader); # pop escape char
 
@@ -245,7 +249,7 @@ impl Reader as module = (
         if peek(&self^) is :Some c then (
             let mut consume_next = 1;
             let try_token :: Result.t[Token, Error] = unwindable token_block (
-                with error = ([T] err => unwind token_block (:Error err));
+                with error = (err => unwind token_block (:Error err));
 
                 let token = (
                     if c == '['      then :ArrayOpen
@@ -288,7 +292,9 @@ impl Reader as module = (
                             consume_next = 0;
                             :Number num
                         )
-                        else (@current error)(:UnknownForm)
+                        else (
+                            (@current error)(:UnknownForm) |> from_never
+                        )
                     )
                 );
                 for _ in 0..consume_next do next(self);
@@ -396,7 +402,7 @@ impl Number as module = (
         else (
             unwindable parse_uint32 (
                 with PanicHandler = {
-                    .handle = [T] msg => unwind parse_uint32 :Error msg,
+                    .handle = msg => unwind parse_uint32 :Error msg,
                 };
                 :Ok String.parse[UInt32](digits)
             )
@@ -426,11 +432,13 @@ impl Number as module = (
 
         let first_digit = next(reader)
             |> Option.and_then(c => c |> Char.is_ascii_digit |> BoolPlus.then_some(c))
-            |> Option.unwrap_or_else(() => error(:MissingDigitsPart));
+            |> Option.unwrap_or_else(() => (
+                error(:MissingDigitsPart) |> from_never
+            ));
 
         if first_digit == '0' then (
             if peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) then (
-                error(:LeadingZero)
+                error(:LeadingZero) |> from_never
             ) else (
                 "0"
             )
@@ -452,7 +460,7 @@ impl Number as module = (
 
             let mut digits = next(reader)
                 |> Option.and_then(c => c |> Char.is_ascii_digit |> BoolPlus.then_some(c))
-                |> Option.unwrap_or_else(() => (@current error)(:NoDigitsAfterDecimal))
+                |> Option.unwrap_or_else(() => ((@current error)(:NoDigitsAfterDecimal)) |> from_never)
                 |> StringPlus.of_char;
 
             while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
@@ -487,7 +495,7 @@ impl Number as module = (
 
             let mut digits = next(reader)
                 |> Option.and_then(c => c |> Char.is_ascii_digit |> BoolPlus.then_some(c))
-                |> Option.unwrap_or_else(() => (@current error)(:NoDigitsAfterExp))
+                |> Option.unwrap_or_else(() => ((@current error)(:NoDigitsAfterExp) |> from_never))
                 |> StringPlus.of_char;
 
             while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
@@ -698,7 +706,7 @@ impl Context as module = (
                     maybe_key^ = :Some str;
                 )
                 else (
-                    (@current error)(:NonStrObjectKey)
+                    (@current error)(:NonStrObjectKey) |> from_never
                 )
             )
         )
@@ -777,7 +785,7 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                         | :Comma => (
                             expecting_comma^ = false;
                         )
-                        | _ => error(:ExpectingComma)
+                        | _ => error(:ExpectingComma) |> from_never
                     )
                 ) else (
                     match token with (
@@ -812,9 +820,9 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             );
                             continue
                         ) else (
-                            error(:TrailingCommaInArray)
+                            error(:TrailingCommaInArray) |> from_never
                         )
-                        | :Comma => error(:EmptyArrayElem)
+                        | :Comma => error(:EmptyArrayElem) |> from_never
                         | :ObjectOpen => (
                             expecting_comma^ = true;
                             # drop `ctx` here
@@ -822,8 +830,8 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             &mut ctxs |> List.push_back(Context.new_object());
                             continue
                         )
-                        | :ObjectClose => error(:MismatchedObjectClose)
-                        | :Colon => error(:UnexpectedColon)
+                        | :ObjectClose => error(:MismatchedObjectClose) |> from_never
+                        | :Colon => error(:UnexpectedColon) |> from_never
                     );
                     expecting_comma^ = true;
                 )
@@ -856,7 +864,7 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                         | :Comma => (
                             expecting_comma^ = false
                         )
-                        | _ => error(:ExpectingComma)
+                        | _ => error(:ExpectingComma) |> from_never
                     )
                 ) else (
                     match token with (
@@ -889,12 +897,12 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             );
                             continue
                         ) else (
-                            error(:TrailingCommaInObject)
+                            error(:TrailingCommaInObject) |> from_never
                         )
-                        | :Comma => error(:EmptyObjectPair)
-                        | :ArrayClose => error(:MismatchedArrayClose)
-                        | :Colon => error(:EmptyObjectKey)
-                        | _ => error(:NonStrObjectKey)
+                        | :Comma => error(:EmptyObjectPair) |> from_never
+                        | :ArrayClose => error(:MismatchedArrayClose) |> from_never
+                        | :Colon => error(:EmptyObjectKey) |> from_never
+                        | _ => error(:NonStrObjectKey) |> from_never
                     );
                     expecting_comma^ = true;
                 )
@@ -906,11 +914,11 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                     .expecting_comma_or_colon = ref mut expecting_colon
                 } => if expecting_colon^ then (
                     match token with (
-                        | :ObjectClose => error(:MissingPairValue)
+                        | :ObjectClose => error(:MissingPairValue) |> from_never
                         | :Colon => (
                             expecting_colon^ = false
                         )
-                        | _ => error(:ExpectingColon)
+                        | _ => error(:ExpectingColon) |> from_never
                     )
                 ) else (
                     let take_key = (ctx :: &mut Context) -> String => (
@@ -950,8 +958,8 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             &mut ctxs |> List.push_back(Context.new_array());
                             continue
                         )
-                        | :ArrayClose => error(:MismatchedArrayClose)
-                        | :Comma => error(:EmptyObjectValue)
+                        | :ArrayClose => error(:MismatchedArrayClose) |> from_never
+                        | :Comma => error(:EmptyObjectValue) |> from_never
                         | :ObjectOpen => (
                             let expecting_comma = expecting_colon;
                             expecting_comma^ = true;
@@ -981,9 +989,9 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             );
                             continue
                         ) else (
-                            error(:ExpectingValue)
+                            error(:ExpectingValue) |> from_never
                         )
-                        | :Colon => error(:UnexpectedColon)
+                        | :Colon => error(:UnexpectedColon) |> from_never
                     );
                     let expecting_comma = expecting_colon;
                     expecting_comma^ = true;
@@ -998,13 +1006,13 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                 | :ArrayOpen => (
                     &mut ctxs |> List.push_back(Context.new_array())
                 )
-                | :ArrayClose => error(:MismatchedArrayClose)
-                | :Comma => error(:UnexpectedComma)
+                | :ArrayClose => error(:MismatchedArrayClose) |> from_never
+                | :Comma => error(:UnexpectedComma) |> from_never
                 | :ObjectOpen => (
                     &mut ctxs |> List.push_back(Context.new_object())
                 )
-                | :ObjectClose => error(:MismatchedObjectClose)
-                | :Colon => error(:UnexpectedColon)
+                | :ObjectClose => error(:MismatchedObjectClose) |> from_never
+                | :Colon => error(:UnexpectedColon) |> from_never
             )
         )
     );
