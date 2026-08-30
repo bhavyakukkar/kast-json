@@ -1,5 +1,7 @@
 module:
 
+const UInt32 = Int32;
+
 const CharPlus = (
     module:
 
