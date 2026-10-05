@@ -401,14 +401,19 @@ impl Number as module = (
         f
     );
 
-    const try_u32 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Result.t[UInt32, String] => (
+    const try_u32 = (&{
+        .neg,
+        .digits = ref digits,
+        .fraction_digits = ref fraction_digits,
+        .exponent = ref exponent,
+    } :: &Number) -> Result.t[UInt32, String] => (
         if neg then (
             :Error String.from_str("Negative JSON number cannot be converted to UInt32")
         )
-        else if String.length(&fraction_digits |> as_str) > 0 then (
+        else if String.length(fraction_digits |> as_str) > 0 then (
             :Error String.from_str("JSON number with fractional part cannot be converted to UInt32")
         )
-        else if String.length(&exponent.digits |> as_str) > 0 then (
+        else if String.length(&exponent^.digits |> as_str) > 0 then (
             :Error String.from_str("JSON number with exponent part cannot be converted to UInt32")
         )
         else (
@@ -416,7 +421,7 @@ impl Number as module = (
                 with PanicHandler = {
                     .handle = msg => unwind parse_uint32 :Error String.from_str(msg),
                 };
-                :Ok String.parse[UInt32](&digits |> as_str)
+                :Ok String.parse[UInt32](digits |> as_str)
             )
         )
     );

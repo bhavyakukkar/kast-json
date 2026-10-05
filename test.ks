@@ -68,7 +68,7 @@ test(
     let num = Number.parse(&mut reader) |> Option.unwrap;
     assert(Number.to_f64(&num) == -51.89, "Number.into_f64 has a bug");
     assert_err(
-        num |> Number.try_u32,
+        &num |> Number.try_u32,
         String.from_str("Negative JSON number cannot be converted to UInt32")
     );
 );
@@ -78,7 +78,7 @@ test(
     with error = (err => panic(&String.to_string(err) |> as_str));
     let num = Number.parse(&mut reader) |> Option.unwrap;
     assert(
-        num |> Number.try_u32 |> Result.expect("shouldn't fail") == 5189,
+        &num |> Number.try_u32 |> Result.expect("shouldn't fail") == 5189,
         "Number.try_u32 has a bug",
     );
 );
