@@ -365,6 +365,21 @@ impl Number as module = (
 
     const next = Reader.next;
 
+    const clone = (&{
+        .neg,
+        .digits = ref digits,
+        .fraction_digits = ref fraction_digits,
+        .exponent = ref exponent,
+    } :: type (&Number)) -> Number => {
+        .neg,
+        .digits = digits |> as_str |> String.from_str,
+        .fraction_digits = fraction_digits |> as_str |> String.from_str,
+        .exponent = {
+            .neg = exponent^.neg,
+            .digits = &exponent^.digits |> as_str |> String.from_str,
+        },
+    };
+
     ## convert (losslessly but without failure) a JSON number to a Float64
     const to_f64 = (&{
         .neg,
@@ -713,6 +728,28 @@ impl Value as module = (
         .value = self,
         .indent = 0,
     };
+
+    const clone = (v :: &Value) -> Value => match v^ with (
+        | :Null => :Null
+        | :Bool b => :Bool b
+        | :Number (ref n) => :Number Number.clone(n)
+        | :String (ref s) => :String (s |> as_str |> String.from_str)
+        | :Array (ref a) => :Array (
+            a
+            |> ArrayList.iter
+            |> std.iter.map(clone)
+            |> ArrayList.from_iter
+        )
+        | :Object (ref o) => :Object (
+            o
+            |> ArrayList.iter
+            |> std.iter.map(&{ref key, ref value} => {
+                key |> as_str |> String.from_str,
+                clone(value),
+            })
+            |> ArrayList.from_iter
+        )
+    );
 
     const eq = (lhs :: &Value, rhs :: &Value) -> Bool => (
         match ({lhs^, rhs^} :: {Value, Value}) with (
