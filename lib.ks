@@ -533,6 +533,14 @@ impl Number as module = (
             .exponent = parse_exponent(reader),
         })
     );
+
+    const eq = (lhs :: &Number, rhs :: &Number) -> Bool => (
+        lhs^.neg == rhs^.neg and
+        as_str(&lhs^.digits) == as_str(&rhs^.digits) and
+        as_str(&lhs^.fraction_digits) == as_str(&rhs^.fraction_digits) and
+        lhs^.exponent.neg == rhs^.exponent.neg and
+        as_str(&lhs^.exponent.digits) == as_str(&rhs^.exponent.digits)
+    );
 );
 
 const parse_number = Number.parse;
@@ -695,6 +703,55 @@ impl Value as module = (
         .value = self,
         .indent = 0,
     };
+
+    const eq = (lhs :: &Value, rhs :: &Value) -> Bool => (
+        match ({lhs^, rhs^} :: {Value, Value}) with (
+            | {:Null, :Null} => true
+            | {:Null, _} => false
+
+            | {:Bool l, :Bool r} => l == r
+            | {:Bool _, _} => false
+
+            | {:Number (ref l), :Number (ref r)} => Number.eq(l, r)
+            | {:Number _, _} => false
+
+            | {:String (ref l), :String (ref r)} => as_str(l) == as_str(r)
+            | {:String _, _} => false
+
+            | {:Array (ref l), :Array (ref r)} => with_return (
+                let len = ArrayList.length(l);
+                if (len != ArrayList.length(r)) then (
+                    return false;
+                );
+                for i in 0..len do (
+                    if (not eq(
+                        l |> ArrayList.at(i),
+                        r |> ArrayList.at(i),
+                    )) then (
+                        return false;
+                    )
+                );
+                true
+            )
+            | {:Array _, _} => false
+
+            | {:Object (ref l), :Object (ref r)} => with_return (
+                let len = ArrayList.length(l);
+                if (len != ArrayList.length(r)) then (
+                    return false;
+                );
+                for i in 0..len do (
+                    let le = l |> ArrayList.at(i);
+                    let re = r |> ArrayList.at(i);
+                    if (as_str(&le^.0) != as_str(&re^.0) or not eq(&le^.1, &re^.1)) then (
+                        return false;
+                    )
+                );
+                true
+            )
+            | {:Object _, _} => false
+        )
+    )
 );
 
 # private

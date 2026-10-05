@@ -11,19 +11,35 @@ const assert = (condition :: Bool, msg :: &str) => (
     )
 );
 
-const assert_eq = [T] (lhs :: T, rhs :: T) => (
-    if std.repr.structurally_equal(&lhs, &rhs) then (
-        ()
-    ) else (
-        std.dbg.print({.lhs = lhs, .rhs = rhs});
-        std.panic("assertion failed: lhs != rhs")
+const assert_err = [T] (
+    v :: Result.t[T, String],
+    exp_err :: String,
+) => (
+    match v with (
+        | :Ok _ => (
+            std.panic("assertion failed: not an error as unexpected")
+        )
+        | :Error e => (
+            if as_str(&e) == as_str(&exp_err) then (
+                ()
+            ) else (
+                std.panic("assertion failed: error message differs")
+            )
+        )
     )
 );
 
 const test = (src :: &str, value :: Value) => (
     let mut reader = Reader.create(src);
     let parsed = parse(&mut reader) |> Result.unwrap;
-    assert_eq(parsed, value);
+    if Value.eq(&parsed, &value) then (
+        ()
+    ) else (
+        println!("test failed: json doesn't match");
+        println!("parsed:\n\(to_string(parsed))");
+        println!("\nexpected:\n\(to_string(value))");
+        std.panic("tests failed")
+    )
 );
 
 test("null {", :Null);
@@ -50,10 +66,10 @@ test(
     let mut reader = Reader.create("-5.189e1");
     with error = (err => panic(&String.to_string(err) |> as_str));
     let num = Number.parse(&mut reader) |> Option.unwrap;
-    assert_eq(num |> Number.into_f64, -51.89);
-    assert_eq(
+    assert(Number.into_f64(num) == -51.89, "Number.into_f64 has a bug");
+    assert_err(
         num |> Number.try_u32,
-        :Error String.from_str("Negative JSON number cannot be converted to UInt32")
+        String.from_str("Negative JSON number cannot be converted to UInt32")
     );
 );
 
@@ -61,12 +77,21 @@ test(
     let mut reader = Reader.create("5189");
     with error = (err => panic(&String.to_string(err) |> as_str));
     let num = Number.parse(&mut reader) |> Option.unwrap;
-    assert_eq(num |> Number.try_u32, :Ok 5189);
+    assert(
+        num |> Number.try_u32 |> Result.expect("shouldn't fail") == 5189,
+        "Number.try_u32 has a bug",
+    );
 );
 
-assert_eq((UInt32 as IntoNumber).into(137803 :: UInt32), {
-    .digits = String.from_str("137803"),
-    .neg = false,
-    .fraction_digits = String.from_str(""),
-    .exponent = { .neg = true, .digits = String.from_str("") }
-});
+assert(
+    Number.eq(
+        &(UInt32 as IntoNumber).into(137803 :: UInt32),
+        &{
+            .digits = String.from_str("137803"),
+            .neg = false,
+            .fraction_digits = String.from_str(""),
+            .exponent = { .neg = true, .digits = String.from_str("") }
+        }
+    ),
+    "(UInt32 as IntoNumber).into has a bug",
+);
