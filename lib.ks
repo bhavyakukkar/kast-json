@@ -2,13 +2,14 @@ const __private__ = (
 module:
 
 use std.*;
-use (include "stdplus.ks").*;
+use std.fmt.write;
+use (import "stdplus.ks").*;
 
 # Notes
 # - a variant of Iterable that can be stopped when you don't want it to iterate any more would be
 #   helpful
 
-const PRETTY_PRINTER_INDENT :: String = "    ";
+const PRETTY_PRINTER_INDENT :: &str = "    ";
 
 ## non-exhaustive
 const Error = newtype (
@@ -41,7 +42,7 @@ const Error = newtype (
 );
 
 impl Error as ToString = {
-    .to_string = err => match err with (
+    .to_string = err => String.from_str(match err with (
         | :ImmediateEOF => "unexpected end-of-file"
         | :UnexpectedEOF => "unexpected end-of-file"
         | :UnknownForm => "unknown form: neither null|true|false|number|string|array|object"
@@ -68,7 +69,7 @@ impl Error as ToString = {
         | :EmptyObjectPair => "object pairs may not be empty"
         | :MissingPairValue => "missing object value before closing object"
         | :TrailingChars => "trailing characters found after value"
-    )
+    ))
 };
 
 const is_json_whitespace = (c :: &Char) -> Bool => (
@@ -82,7 +83,7 @@ const Pos = newtype {
 };
 
 impl Pos as ToString = {
-    .to_string = { .line, .col, ... } => (String.to_string(line) + ":" + String.to_string(col)),
+    .to_string = { .line, .col, ... } => format!("\(line):\(col)"),
 };
 
 const ErrorPos = newtype {
@@ -104,7 +105,7 @@ const Token = newtype (
 );
 
 const Reader = newtype {
-    .ptr :: &String,
+    .ptr :: &str,
     .pos :: Pos,
 };
 
@@ -114,7 +115,7 @@ const error = @context RaiseError;
 impl Reader as module = (
     module:
 
-    const create = (s :: &String) -> Reader => {
+    const create = (s :: &str) -> Reader => {
         .ptr = s,
         .pos = {
             .line = 1,
@@ -123,13 +124,15 @@ impl Reader as module = (
         },
     };
 
-    const is_eof = (self :: &Reader) -> Bool => self^.pos.byte >= self^.ptr^ |> String.length;
+    const is_eof = (self :: &Reader) -> Bool => (
+        self^.pos.byte >= self^.ptr |> String.length
+    );
 
     const next = (self :: &mut Reader) -> Option.t[Char] => (
         if is_eof(&self^) then (
             :None
         ) else (
-            let c = self^.ptr^ |> String.at(self^.pos.byte);
+            let c = self^.ptr |> String.at(self^.pos.byte);
             self^.pos.byte += Char.string_encoding_len(c);
             if c == '\n' then (
                 self^.pos.line += 1;
@@ -144,7 +147,7 @@ impl Reader as module = (
     const peek = (self :: &Reader) -> Option.t[Char] => if is_eof(self) then (
         :None
     ) else (
-        :Some (self^.ptr^ |> String.at(self^.pos.byte))
+        :Some (self^.ptr |> String.at(self^.pos.byte))
     );
 
     const discard_ws = (self :: &mut Reader) => (
@@ -194,12 +197,12 @@ impl Reader as module = (
 
         ## parse contents of a string literal (excluding the enclosing double-quotes)
         const parse = (reader :: &mut Reader) -> String => with_return (
-            let mut str = "";
+            let mut result = StringBuilder.new();
 
             while peek(&reader^) is :Some c do (
                 # `"` encountered without preceding `\`, end string
                 if c == '"' then (
-                    return str;
+                    return result |> StringBuilder.into_string;
                 )
                 else if c == '\\' then (
                     next(reader); # pop slash
@@ -227,17 +230,17 @@ impl Reader as module = (
                     );
                     for _ in 0..consume_next do next(reader); # pop escape char
 
-                    str = str + StringPlus.of_char(esc);
+                    &mut result |> StringBuilder.add_String(StringPlus.of_char(esc));
                 )
                 else if CharPlus.is_control(&c) then (
                     (@current error)(:InvalidChar);
                 )
                 else (
                     next(reader);
-                    str = str + StringPlus.of_char(c);
+                    &mut result |> StringBuilder.add_String(StringPlus.of_char(c));
                 )
             );
-            str
+            result |> StringBuilder.into_string
         );
     );
 
@@ -247,7 +250,7 @@ impl Reader as module = (
         discard_ws(self);
 
         if peek(&self^) is :Some c then (
-            let mut consume_next = 1;
+            let mut consume_next :: Int32 = 1;
             let try_token :: Result.t[Token, Error] = unwindable token_block (
                 with error = (err => unwind token_block (:Error err));
 
@@ -265,11 +268,11 @@ impl Reader as module = (
                     )
                     else (
                         # for parsing `null` or `true` or `false`
-                        let n_chars_eq = (n, str) => (
-                            if (String.length(self^.ptr^) - self^.pos.byte >= n) then (
+                        let n_chars_eq = (n, s) => (
+                            if (String.length(self^.ptr) - self^.pos.byte >= n) then (
                                 # TODO: if calling `substring` with invalid code-points becomes
                                 # illegal, this will need some changes
-                                String.substring(self^.ptr^, self^.pos.byte, n) == str
+                                String.substring(self^.ptr, self^.pos.byte, n) == s
                             ) else (
                                 false
                             )
@@ -319,34 +322,38 @@ const Number = newtype {
 
 impl Number as ToString = {
     .to_string = { .neg, .digits, .fraction_digits, .exponent } => (
-        let mut s = "";
+        let mut s = StringBuilder.new();
         if neg then (
-            s += "-";
+            write!(&mut s, "-");
         );
-        s += digits;
-        if not (fraction_digits |> StringPlus.is_empty) then (
-            s += "." + fraction_digits;
+        &mut s |> StringBuilder.add_String(digits);
+        if not (&fraction_digits |> as_str |> StringPlus.is_empty) then (
+            write!(&mut s, ".\(&fraction_digits |> as_str)");
         );
-        if not (exponent.digits |> StringPlus.is_empty) then (
-            s += "E" + (if exponent.neg then "-" else "+") + exponent.digits;
+        if not (&exponent.digits |> as_str |> StringPlus.is_empty) then (
+            write!(&mut s, "E\(if exponent.neg then "-" else "+")\(&exponent.digits |> as_str)");
         );
-        s
+        s |> StringBuilder.into_string
     )
 };
 
-impl UInt32 as Into[Number] = {
+const IntoNumber = [Self] newtype {
+    .into :: Self -> Number,
+};
+
+impl UInt32 as IntoNumber = {
     .into = mut num => (
-        let mut digits = "";
+        let mut digits = StringBuilder.new();
         while num > 0 do (
-            digits += num % 10 |> Char.from_digit |> StringPlus.of_char;
+            &mut digits |> StringBuilder.add_String(num % 10 |> Char.from_digit |> StringPlus.of_char);
             num = num / 10;
         );
-        digits = StringPlus.rev(digits);
+        let digits = StringPlus.rev(&(digits |> StringBuilder.into_string) |> as_str);
         {
             .digits,
             .neg = false,
-            .fraction_digits = "",
-            .exponent = { .neg = default(), .digits = "" }
+            .fraction_digits = String.from_str(""),
+            .exponent = { .neg = default(), .digits = String.from_str("") }
         }
     ),
 };
@@ -362,13 +369,13 @@ impl Number as module = (
     const into_f64 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Float64 => (
         # consider digits
         let mut f = 0;
-        for c in digits |> String.iter do (
+        for c in &digits |> as_str |> String.iter do (
             f = f*10.0 + CharPlus.parse[Float64](c);
         );
 
         # consider fraction-digits
         let mut mult = 0.1;
-        for c in fraction_digits |> String.iter do (
+        for c in &fraction_digits |> as_str |> String.iter do (
             f += CharPlus.parse[Float64](c) * mult;
             mult *= 0.1;
         );
@@ -378,9 +385,9 @@ impl Number as module = (
             f = -f;
         );
 
-        if not (exponent.digits |> StringPlus.is_empty) then (
+        if not (&exponent.digits |> as_str |> StringPlus.is_empty) then (
             # consider exponent
-            let exp = String.parse[UInt32](exponent.digits);
+            let exp = String.parse[UInt32](&exponent.digits |> as_str);
             for i in 0..exp do (
                 f *= if exponent.neg then 0.1 else 10;
             )
@@ -391,20 +398,20 @@ impl Number as module = (
 
     const try_u32 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Result.t[UInt32, String] => (
         if neg then (
-            :Error "Negative JSON number cannot be converted to UInt32"
+            :Error String.from_str("Negative JSON number cannot be converted to UInt32")
         )
-        else if String.length(fraction_digits) > 0 then (
-            :Error "JSON number with fractional part cannot be converted to UInt32"
+        else if String.length(&fraction_digits |> as_str) > 0 then (
+            :Error String.from_str("JSON number with fractional part cannot be converted to UInt32")
         )
-        else if String.length(exponent.digits) > 0 then (
-            :Error "JSON number with exponent part cannot be converted to UInt32"
+        else if String.length(&exponent.digits |> as_str) > 0 then (
+            :Error String.from_str("JSON number with exponent part cannot be converted to UInt32")
         )
         else (
             unwindable parse_uint32 (
                 with PanicHandler = {
-                    .handle = msg => unwind parse_uint32 :Error msg,
+                    .handle = msg => unwind parse_uint32 :Error String.from_str(msg),
                 };
-                :Ok String.parse[UInt32](digits)
+                :Ok String.parse[UInt32](&digits |> as_str)
             )
         )
     );
@@ -440,13 +447,16 @@ impl Number as module = (
             if peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) then (
                 error(:LeadingZero) |> from_never
             ) else (
-                "0"
+                String.from_str("0")
             )
         ) else (
             let mut digits = StringPlus.of_char(first_digit);
         
             while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
-                digits += next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char;
+                digits = String.concat_owned(
+                    digits,
+                    next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char,
+                );
             );
 
             digits
@@ -464,12 +474,15 @@ impl Number as module = (
                 |> StringPlus.of_char;
 
             while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
-                digits += next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char;
+                digits = String.concat_owned(
+                    digits,
+                    next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char,
+                );
             );
 
             digits
         ) else (
-            ""
+            String.from_str("")
         )
     );
 
@@ -499,12 +512,15 @@ impl Number as module = (
                 |> StringPlus.of_char;
 
             while peek(&reader^) |> Option.is_some_and(Char.is_ascii_digit) do (
-                digits += next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char;
+                digits = String.concat_owned(
+                    digits,
+                    next(reader) |> Option.expect("peek was :Some") |> StringPlus.of_char,
+                );
             );
 
             { .neg, .digits }
         ) else (
-            { .neg = default(), .digits = "" }
+            { .neg = default(), .digits = String.from_str("") }
         )
     );
 
@@ -532,74 +548,75 @@ const Value = newtype (
     | :Object List.t[Pair]
 );
 
-const escape_json_string = (s :: String) -> String => (
-    let mut new = "\"";
+const escape_json_string = (s :: &str) -> String => (
+    let mut new = StringBuilder.new();
+    write!(&mut new, "\"");
     for c in String.iter(s) do (
         if c == '"' then (
-            new += "\\\"";
+            write!(&mut new, "\\\"");
         ) else if c == '\\' then (
-            new += "\\\\";
+            write!(&mut new, "\\\\");
         ) else if c == '/' then (
-            new += "/";
+            write!(&mut new, "/");
         ) else if c == '\b' then (
-            new += "\\b";
+            write!(&mut new, "\\b");
         ) else if c == '\f' then (
-            new += "\\f";
+            write!(&mut new, "\\f");
         ) else if c == '\n' then (
-            new += "\\n";
+            write!(&mut new, "\\n");
         ) else if c == '\r' then (
-            new += "\\r";
+            write!(&mut new, "\\r");
         ) else if c == '\t' then (
-            new += "\\t";
+            write!(&mut new, "\\t");
         )
         # control-characters can only be represented via unicode notation (`\uxxxx`)
         else if CharPlus.is_control(&c) then (
             const pad_four_char_code = (c :: Char) => (
-                let s = "000" + (Char.code(c) |> String.to_string);
-                s |> String.substring(String.length(s) - 4, 4)
+                let s = format!("000\(Char.code(c))");
+                let s = &s |> as_str;
+                String.from_str(s |> String.substring(String.length(s) - 4, 4))
             );
-            new += "\\u" + pad_four_char_code(c);
+            write!(&mut new, "\\u\(pad_four_char_code(c))");
         ) else (
-            new += StringPlus.of_char(c);
+            write!(&mut new, "\(StringPlus.of_char(c))");
         )
     );
-    new + "\""
+    write!(&mut new, "\"");
+    new |> StringBuilder.into_string
 );
 
 impl Value as ToString = {
     .to_string = value => match value with (
-        | :Null => "null"
-        | :Bool b => if b then "true" else "false"
+        | :Null => String.from_str("null")
+        | :Bool b => String.from_str(if b then "true" else "false")
         | :Number num => String.to_string(num)
-        | :String str => escape_json_string(str)
+        | :String ref s => escape_json_string(s |> as_str)
         | :Array ref values => (
-            if List.is_empty(values) then "[]"
+            if List.is_empty(values) then String.from_str("[]")
             else (
-                let mut str = "[" + (Value as ToString).to_string((values |> List.at(0))^);
+                let mut s = StringBuilder.new();
+                write!(&mut s, "[\(values^.[0])");
                 for {i, value} in List.iteri(values) do (
                     if i == 0 then continue;
-                    str += "," + (Value as ToString).to_string(value^);
+                    write!(&mut s, ",\(value^)");
                 );
-                str + "]"
+                write!(&mut s, "]");
+                s |> StringBuilder.into_string
             )
         )
         | :Object ref pairs => (
-            if List.is_empty(pairs) then "{}"
+            if List.is_empty(pairs) then String.from_str("{}")
             else (
-                let { first_key, first_value } = List.at(pairs, 0)^;
-                let mut str = "{" +
-                    escape_json_string(first_key) +
-                    ":" +
-                    (Value as ToString).to_string(first_value);
+                let { ref first_key, ref first_value } = List.at(pairs, 0)^;
+                let mut s = StringBuilder.new();
+                write!(&mut s, "{\(escape_json_string(first_key |> as_str)):\(first_value^)");
                 for { i, pair } in List.iteri(pairs) do (
                     if i == 0 then continue;
-                    let { key, value } = pair^;
-                    str += "," +
-                        escape_json_string(key) +
-                        ":" +
-                        (Value as ToString).to_string(value);
+                    let { ref key, ref value } = pair^;
+                    write!(&mut s, ",\(escape_json_string(key |> as_str)):\(value^)");
                 );
-                str + "}"
+                write!(&mut s, "}");
+                s |> StringBuilder.into_string
             )
         )
     )
@@ -612,58 +629,60 @@ const PrettyPrinter = newtype {
 
 impl PrettyPrinter as ToString = {
     .to_string = { .value, .indent } => match value with (
-        | :Null => "null"
-        | :Bool b => if b then "true" else "false"
+        | :Null => String.from_str("null")
+        | :Bool b => String.from_str(if b then "true" else "false")
         | :Number num => String.to_string(num)
-        | :String str => escape_json_string(str)
+        | :String s => escape_json_string(&s |> as_str)
         | :Array ref values => (
-            if List.is_empty(values) then "[]"
+            if List.is_empty(values) then String.from_str("[]")
             else (
-                let mut str = "[\n" +
-                    StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
+                let mut s = StringBuilder.new();
+                write!(&mut s, "[\n");
+                &mut s |> StringBuilder.add_String((StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1)));
+                &mut s |> StringBuilder.add_String(
                     (PrettyPrinter as ToString).to_string(
                         { .value = (values |> List.at(0))^, .indent = indent + 1 }
-                    );
-
+                    )
+                );
                 for { i, value } in List.iteri(values) do (
                     if i == 0 then continue;
-                    str += ",\n" +
-                        StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
+                    write!(&mut s, ",\n");
+                    &mut s |> StringBuilder.add_String(StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1));
+                    &mut s |> StringBuilder.add_String(
                         (PrettyPrinter as ToString).to_string(
                             { .value = value^, .indent = indent + 1 }
-                        );
+                        )
+                    );
                 );
-
-                str + "\n" + StringPlus.repeat(PRETTY_PRINTER_INDENT, indent) + "]"
+                write!(&mut s, "\n\(StringPlus.repeat(PRETTY_PRINTER_INDENT, indent))]");
+                s |> StringBuilder.into_string
             )
         )
         | :Object ref pairs => (
-            if List.is_empty(pairs) then "{}"
-            else (
-                let { first_key, first_value } = List.at(pairs, 0)^;
-
-                let mut str = "{\n" +
-                    StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
-                    escape_json_string(first_key) +
-                    ": " +
-                    (PrettyPrinter as ToString).to_string(
-                        { .value = first_value, .indent = indent + 1 }
-                    );
-
-                for { i, pair } in List.iteri(pairs) do (
-                    if i == 0 then continue;
-                    let { key, value } = pair^;
-                    str += ",\n" +
-                        StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1) +
-                        escape_json_string(key) +
-                        ": " +
-                        (PrettyPrinter as ToString).to_string(
-                            { .value, .indent = indent + 1 }
-                        );
+            let mut s = StringBuilder.new();
+            write!(&mut s, "{\n");
+            for { i, pair } in List.iteri(pairs) do (
+                if i != 0 then (
+                    &mut s |> StringBuilder.add_str(",\n");
                 );
-
-                str + "\n" + StringPlus.repeat(PRETTY_PRINTER_INDENT, indent) + "}"
-            )
+                let { ref key, ref value } = pair^;
+                &mut s |> StringBuilder.add_String(
+                    StringPlus.repeat(PRETTY_PRINTER_INDENT, indent + 1)
+                );
+                &mut s |> StringBuilder.add_String(escape_json_string(key |> as_str));
+                &mut s |> StringBuilder.add_str(": ");
+                &mut s |> StringBuilder.add_String(
+                    (PrettyPrinter as ToString).to_string(
+                        { .value = value^, .indent = indent + 1 }
+                    )
+                );
+            );
+            &mut s |> StringBuilder.add_str("\n");
+            &mut s |> StringBuilder.add_String(
+                StringPlus.repeat(PRETTY_PRINTER_INDENT, indent)
+            );
+            write!(&mut s, "}");
+            s |> StringBuilder.into_string
         )
     )
 };
@@ -702,8 +721,8 @@ impl Context as module = (
                 if maybe_key^ is :Some ref mut key then (
                     pairs |> List.push_back({ key^, value });
                     maybe_key^ = :None;
-                ) else if value is :String str then (
-                    maybe_key^ = :Some str;
+                ) else if value is :String s then (
+                    maybe_key^ = :Some s;
                 )
                 else (
                     (@current error)(:NonStrObjectKey) |> from_never
@@ -792,7 +811,7 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                         | :Null => arr |> List.push_back(:Null)
                         | :Bool b => arr |> List.push_back(:Bool b)
                         | :Number num => arr |> List.push_back(:Number num)
-                        | :String str => arr |> List.push_back(:String str)
+                        | :String s => arr |> List.push_back(:String s)
                         | :ArrayOpen => (
                             expecting_comma^ = true;
                             # drop `ctx` here
@@ -868,11 +887,11 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                     )
                 ) else (
                     match token with (
-                        | :String str => (
+                        | :String s => (
                             let obj_ctx = ctx |>
                                 Context.as_object_mut |>
                                 Option.expect(":Object match arm");
-                            obj_ctx^.key = :Some str;
+                            obj_ctx^.key = :Some s;
 
                             let expecting_colon = expecting_comma;
                             expecting_colon^ = true;
@@ -945,9 +964,9 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                             let pair :: Pair = { take_key(ctx), :Number num };
                             obj |> List.push_back(pair)
                         )
-                        | :String str => (
+                        | :String s => (
                             # drop `ctx` here
-                            let pair :: Pair = { take_key(ctx), :String str };
+                            let pair :: Pair = { take_key(ctx), :String s };
                             obj |> List.push_back(pair)
                         )
                         | :ArrayOpen => (
@@ -1002,7 +1021,7 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
                 | :Null => ok(:Null)
                 | :Bool b => ok(:Bool b)
                 | :Number n => ok(:Number n)
-                | :String str => ok(:String str)
+                | :String s => ok(:String s)
                 | :ArrayOpen => (
                     &mut ctxs |> List.push_back(Context.new_array())
                 )
@@ -1020,7 +1039,7 @@ const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_r
 );
 
 ## parse the source-string as an individual JSON value
-const parse_one_total = (source :: &String) -> Result.t[Value, ErrorPos] => with_return (
+const parse_one_total = (source :: &str) -> Result.t[Value, ErrorPos] => with_return (
     let mut reader = Reader.create(source);
     parse_one(&mut reader) |> Result.and_then(value => (
         Reader.discard_ws(&mut reader);
@@ -1050,4 +1069,5 @@ const parse = __private__.parse_one; # for backwards compatibility
 use __private__.parse_one_total;
 use __private__.escape_json_string;
 use __private__.error;
+use __private__.IntoNumber;
 )

@@ -1,4 +1,4 @@
-const json = include "lib.ks";
+const json = import "lib.ks";
 use json.*;
 
 const main = () => (

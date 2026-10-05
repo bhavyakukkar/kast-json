@@ -23,8 +23,12 @@
             nixfmt-classic
             nodejs
             just
+            libbacktrace
+            libunwind
+            clang
           ];
           KAST_LIB = "${kast}";
+          CFLAGS = "-O0 -g -fsanitize=address,undefined,leak -lbacktrace -lunwind";
         };
       });
 }
