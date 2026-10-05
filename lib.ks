@@ -603,10 +603,10 @@ impl Value as ToString = {
             if List.is_empty(values) then String.from_str("[]")
             else (
                 let mut s = StringBuilder.new();
-                write!(&mut s, "[\(values^.[0])");
+                write!(&mut s, "[\(to_string(values^.[0]))");
                 for {i, value} in List.iteri(values) do (
                     if i == 0 then continue;
-                    write!(&mut s, ",\(value^)");
+                    write!(&mut s, ",\(to_string(value^))");
                 );
                 write!(&mut s, "]");
                 s |> StringBuilder.into_string
@@ -617,11 +617,11 @@ impl Value as ToString = {
             else (
                 let { ref first_key, ref first_value } = List.at(pairs, 0)^;
                 let mut s = StringBuilder.new();
-                write!(&mut s, "{\(escape_json_string(first_key |> as_str)):\(first_value^)");
+                write!(&mut s, "{\(escape_json_string(first_key |> as_str)):\(to_string(first_value^))");
                 for { i, pair } in List.iteri(pairs) do (
                     if i == 0 then continue;
                     let { ref key, ref value } = pair^;
-                    write!(&mut s, ",\(escape_json_string(key |> as_str)):\(value^)");
+                    write!(&mut s, ",\(escape_json_string(key |> as_str)):\(to_string(value^))");
                 );
                 write!(&mut s, "}");
                 s |> StringBuilder.into_string
