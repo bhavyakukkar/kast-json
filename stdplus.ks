@@ -1,5 +1,8 @@
 module:
 
+use std.fmt.write;
+use std.StringBuilder;
+
 const UInt32 = Int32;
 
 const CharPlus = (
@@ -25,7 +28,7 @@ const CharPlus = (
     );
 
     const parse = [T] (c :: Char) -> T => (
-        String.parse[T](StringPlus.of_char(c))
+        String.parse[T](&StringPlus.of_char(c) |> as_str)
     );
 );
 
@@ -57,9 +60,9 @@ const Option = (
         )
     );
 
-    const expect = [T] (opt :: Option[T], msg :: String) -> T => match opt with (
+    const expect = [T] (opt :: Option[T], msg :: &str) -> T => match opt with (
         | :Some x => x
-        | :None => panic("unwrapped :None: " + msg)
+        | :None => panic(&format!("unwrapped :None: \(msg)") |> as_str)
     );
 );
 
@@ -68,21 +71,21 @@ const StringPlus = (
 
     const of_char = (c :: Char) => (Char as ToString).to_string(c);
 
-    const repeat = (self :: String, times :: UInt32) -> String => (
-        let mut new_str = self;
+    const repeat = (self :: &str, times :: UInt32) -> String => (
         if times == 0 then (
-            ""
+            String.from_str("")
         ) else (
-            for _ in 0..(times - 1) do (
-                new_str += self;
+            let mut new_str = StringBuilder.new();
+            for _ in 0..times do (
+                &mut new_str |> StringBuilder.add_str(self);
             );
-            new_str
+            new_str |> StringBuilder.into_string
         )
     );
 
-    const is_empty = (s :: String) => String.length(s) == 0;
+    const is_empty = (s :: &str) => String.length(s) == 0;
 
-    const index_of_pred = (s :: String, predicate :: Char -> Bool) -> Int32 => with_return (
+    const index_of_pred = (s :: &str, predicate :: Char -> Bool) -> Int32 => with_return (
         for { i, c_at_i } in String.iteri(s) do (
             if predicate(c_at_i) then (
                 return i;
@@ -91,12 +94,12 @@ const StringPlus = (
         -1
     );
 
-    const rev = (s :: String) -> String => with_return (
-        let mut new = "";
+    const rev = (s :: &str) -> String => with_return (
+        let mut new = StringBuilder.new();
         for i in 0..String.length(s) do (
-            new += s |> String.at(String.length(s) - i - 1) |> of_char;
+            write!(&mut new, "\(String.at(s, String.length(s) - i - 1) |> of_char)");
         );
-        new
+        new |> StringBuilder.into_string
     )
 );
 

@@ -1,6 +1,6 @@
-const json = include "lib.ks";
+const json = import "lib.ks";
 use json.*;
-use (include "stdplus.ks").*;
+use (import "stdplus.ks").*;
 
 ## JQ-like query tool that uses the provided Reader not just for input JSON but also for the query
 ## 
@@ -12,18 +12,18 @@ use (include "stdplus.ks").*;
 
 module:
 const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => with_return (
-    let eprint = [T] msg => (
-        std.io.eprint("Error: " + msg);
+    const eprint = [T] (msg :: &str) -> T => (
+        eprintln("Error: \(msg)");
         return
     );
 
     let sub_query = parse(reader) |> Result.unwrap_or_else({ .err, ... } => match err with (
         | :ImmediateEOF => (
             # query finished -> print resulting json
-            json^ |> Value.pretty_printer |> String.to_string |> std.io.print;
+            println!("\(json^ |> Value.pretty_printer)");
             return
         )
-        | err => panic(String.to_string(err))
+        | err => panic(&String.to_string(err) |> as_str)
     ));
 
     match sub_query with (
@@ -32,8 +32,8 @@ const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => wit
                 |> List.find_map(&{ obj_key, ref value } =>
                     if obj_key == key then :Some value else :None)
                 |> Option.unwrap_or_else(() =>
-                    eprint("object " + name + " has no key " + escape_json_string(key)))
-                |> run_query(reader, name + "[" + String.to_string(sub_query) + "]");
+                    eprint(&format!("object \(name) has no key \(escape_json_string(key))") |> as_str))
+                |> run_query(reader, format!("\(name)[\(sub_query)]"));
         ) else (
             eprint(name + " is not an object")
         )
@@ -47,9 +47,9 @@ const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => wit
                 eprint(String.to_string(offset) + " is out of bounds for array " + name);
             elems
                 |> List.at(offset)
-                |> run_query(reader, name + "[" + String.to_string(sub_query) + "]");
+                |> run_query(reader, format!("\(name)[\(sub_query)]"));
         ) else (
-            eprint(name + " is not an array")
+            eprint(&format!("\(name) is not an array") |> as_str)
         )
 
         | _ => panic("sub-queries can only be JSON strings or JSON numbers")
@@ -58,7 +58,7 @@ const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => wit
 
 const main = () => (
     if std.sys.argc() != 3 then (
-        eprint("Usage: " + std.sys.argv_at(0) + " (<file> or -) <query>");
+        eprintln!("Usage: \(std.sys.argv_at(0)) (<file> or -) <query>");
         std.sys.exit(1);
     );
     let input = std.sys.argv_at(1);
@@ -67,17 +67,17 @@ const main = () => (
         else std.fs.read_file(input);
     let query = std.sys.argv_at(2);
 
-    match parse_one_total(&file) with (
+    match parse_one_total(&file |> as_str) with (
         | :Ok value => (
-            let mut reader = Reader.create(&query);
+            let mut reader = Reader.create(query);
             unwindable block (
                 with std.PanicHandler = {
-                    .handle = [T] msg => (
+                    .handle = msg => (
                         std.io.eprint("bad query: " + msg);
                         unwind block ()
                     ),
                 };
-                with error = ([T] err => (
+                with error = (err => (
                     std.io.eprint("bad query");
                     unwind block ()
                 ));
@@ -85,10 +85,7 @@ const main = () => (
             );
         )
         | :Error { .err, .pos } => (
-            eprint("Error in input json at "
-                + String.to_string(pos)
-                + ":\n"
-                + String.to_string(err));
+            eprintln!("Error in input json at \(pos): \(err)");
         )
     );
 );
