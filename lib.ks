@@ -366,16 +366,21 @@ impl Number as module = (
     const next = Reader.next;
 
     ## convert (losslessly but without failure) a JSON number to a Float64
-    const into_f64 = ({ .neg, .digits, .fraction_digits, .exponent } :: Number) -> Float64 => (
+    const to_f64 = (&{
+        .neg,
+        .digits = ref digits,
+        .fraction_digits = ref fraction_digits,
+        .exponent = ref exponent,
+    } :: type (&Number)) -> Float64 => (
         # consider digits
         let mut f = 0;
-        for c in &digits |> as_str |> String.iter do (
+        for c in digits |> as_str |> String.iter do (
             f = f*10.0 + CharPlus.parse[Float64](c);
         );
 
         # consider fraction-digits
         let mut mult = 0.1;
-        for c in &fraction_digits |> as_str |> String.iter do (
+        for c in fraction_digits |> as_str |> String.iter do (
             f += CharPlus.parse[Float64](c) * mult;
             mult *= 0.1;
         );
@@ -385,11 +390,11 @@ impl Number as module = (
             f = -f;
         );
 
-        if not (&exponent.digits |> as_str |> StringPlus.is_empty) then (
+        if not (&exponent^.digits |> as_str |> StringPlus.is_empty) then (
             # consider exponent
-            let exp = String.parse[UInt32](&exponent.digits |> as_str);
+            let exp = String.parse[UInt32](&exponent^.digits |> as_str);
             for i in 0..exp do (
-                f *= if exponent.neg then 0.1 else 10;
+                f *= if exponent^.neg then 0.1 else 10;
             )
         );
         
