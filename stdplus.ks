@@ -151,7 +151,7 @@ const List = (
     ) -> std.iter.Iterable[type { UInt32, type (&T) }] => (
         let mut i = 0;
         {
-            .iter = f => (
+            .iter = @move f => (
                 iter(a).iter(item => (
                     let ret = f({i, item});
                     i += 1;

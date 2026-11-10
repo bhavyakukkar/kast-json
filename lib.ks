@@ -550,7 +550,7 @@ impl Number as module = (
     );
 
     ## parse a JSON number, or return :None if the incoming form doesn't resemble a JSON number
-    const parse = (reader :: &mut Reader) -> Option.t[Number] => (
+    const parse = (reader :: &mut Reader) -> Option.t[Number] => with_return (
         begin_json_number(&reader^) |> Option.map(first_char => {
             .neg = parse_negativeness(first_char, reader),
             .digits = parse_digits(reader),
@@ -871,7 +871,8 @@ impl Context as module = (
 ## parse one JSON value from the reader
 const parse_one = (reader :: &mut Reader) -> Result.t[Value, ErrorPos] => with_return (
     let ok = val => return :Ok val;
-    let error = err => return :Error { .err, .pos = reader^.pos };
+    with error = (err => return :Error { .err, .pos = reader^.pos });
+    let error = @current error;
 
     let mut ctxs :: List.t[Context] = List.new();
     loop (
