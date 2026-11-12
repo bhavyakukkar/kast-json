@@ -23,6 +23,7 @@ const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => wit
         )
         | err => panic(&format!("bad query: \(err |> to_string)") |> as_str)
     ));
+    let next_name = &sub_query |> Value.clone |> to_string;
 
     match sub_query with (
         | :String key => if json is &(:Object ref pairs) then (
@@ -34,7 +35,7 @@ const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => wit
                     eprint(&format!("object \(name) has no key \(escape_json_string(&key |> as_str))")
                         |> as_str)
                 ))
-                |> run_query(reader, format!("\(name)[\(sub_query |> to_string)]"));
+                |> run_query(reader, format!("\(name)[\(next_name)]"));
         ) else (
             eprint(&format!("\(name) is not an object") |> as_str)
         )
@@ -49,7 +50,7 @@ const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => wit
                 eprint(&format!("\(offset) is out of bounds for array \(name)") |> as_str);
             elems
                 |> ArrayList.at(offset)
-                |> run_query(reader, format!("\(name)[\(sub_query |> to_string)]"));
+                |> run_query(reader, format!("\(name)[\(next_name)]"));
         ) else (
             eprint(&format!("\(name) is not an array") |> as_str)
         )
