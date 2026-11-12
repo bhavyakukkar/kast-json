@@ -16,6 +16,24 @@
         "type": "github"
       }
     },
+    "flake-parts": {
+      "inputs": {
+        "nixpkgs-lib": "nixpkgs-lib"
+      },
+      "locked": {
+        "lastModified": 1790898470,
+        "narHash": "sha256-zTwuwezD0w3hpga6a6P8emidzAZFyWqlNeRBlpWOOl8=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "024633cd702b10285db5cb19b40ad48d2399ba60",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -76,14 +94,15 @@
         "nix-filter": "nix-filter",
         "nixpkgs": "nixpkgs",
         "opam-nix": "opam-nix",
-        "opam-repository": "opam-repository"
+        "opam-repository": "opam-repository",
+        "tcc-overlay": "tcc-overlay"
       },
       "locked": {
-        "lastModified": 1791195513,
-        "narHash": "sha256-twyWAs7Zk/DlbYIBv1XaLaBTXUOOKSdXpH7vvlladns=",
+        "lastModified": 1794297643,
+        "narHash": "sha256-JHJrgyF+quyKMtbJBryz/dVRQE+840ncSuQ0uNnV3pI=",
         "owner": "kast-lang",
         "repo": "kast",
-        "rev": "cc639e07a1031244efe093f09a45e638b85a2c3d",
+        "rev": "0838b1d7b40cb63e1a7875005a540cd41d671d24",
         "type": "github"
       },
       "original": {
@@ -136,6 +155,21 @@
         "owner": "nixos",
         "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-lib": {
+      "locked": {
+        "lastModified": 1790477367,
+        "narHash": "sha256-oujbxmVKDhci2E4EM3KyAbRUgp5/IsCoiA/LfEF7OOk=",
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "rev": "f7cd230690d9fc982d06129f9189b101fddcfa3b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
         "type": "github"
       }
     },
@@ -304,6 +338,28 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "tcc-overlay": {
+      "inputs": {
+        "flake-parts": "flake-parts",
+        "nixpkgs": [
+          "kast",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1793169262,
+        "narHash": "sha256-voBprqB76dFCkfPL3yJK2kLd+9t/7ZkJIaP8AXo8PmA=",
+        "owner": "vesdev",
+        "repo": "tcc-overlay",
+        "rev": "7d80aa0898c8c78536fb13881b29abd751644d30",
+        "type": "github"
+      },
+      "original": {
+        "owner": "vesdev",
+        "repo": "tcc-overlay",
         "type": "github"
       }
     }

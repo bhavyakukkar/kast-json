@@ -1,6 +1,5 @@
-const json = import "lib.ks";
-use json.*;
-use (import "stdplus.ks").*;
+use (import "lib.ks").*;
+const {.ArrayList, .escape_json_string, .uint32_to_int32, ...} = import "./src/utils.ks";
 
 ## JQ-like query tool that uses the provided Reader not just for input JSON but also for the query
 ## 
@@ -13,41 +12,44 @@ use (import "stdplus.ks").*;
 module:
 const run_query = (json :: &Value, reader :: &mut Reader, name :: String) => with_return (
     const eprint = [T] (msg :: &str) -> T => (
-        eprintln("Error: \(msg)");
-        return
+        panic(&format!("Error: \(msg)") |> as_str)
     );
 
     let sub_query = parse(reader) |> Result.unwrap_or_else({ .err, ... } => match err with (
         | :ImmediateEOF => (
             # query finished -> print resulting json
-            println!("\(json^ |> Value.pretty_printer)");
+            println!("\(json^ |> Value.pretty_printer |> to_string)");
             return
         )
-        | err => panic(&String.to_string(err) |> as_str)
+        | err => panic(&format!("bad query: \(err |> to_string)") |> as_str)
     ));
 
     match sub_query with (
         | :String key => if json is &(:Object ref pairs) then (
             pairs
-                |> List.find_map(&{ obj_key, ref value } =>
-                    if obj_key == key then :Some value else :None)
-                |> Option.unwrap_or_else(() =>
-                    eprint(&format!("object \(name) has no key \(escape_json_string(key))") |> as_str))
-                |> run_query(reader, format!("\(name)[\(sub_query)]"));
+                |> ArrayList.find_map((&{ obj_key, ref value } :: &Pair) => (
+                    if obj_key == key then :Some value else :None
+                ))
+                |> Option.unwrap_or_else(() => (
+                    eprint(&format!("object \(name) has no key \(escape_json_string(&key |> as_str))")
+                        |> as_str)
+                ))
+                |> run_query(reader, format!("\(name)[\(sub_query |> to_string)]"));
         ) else (
-            eprint(name + " is not an object")
+            eprint(&format!("\(name) is not an object") |> as_str)
         )
 
         | :Number num => if json is &(:Array ref elems) then (
-            let offset = num
+            let offset = &num
                 |> Number.try_u32
                 |> Result.unwrap_or_else(_ =>
-                    eprint(String.to_string(num) + " is not a valid offset"));
-            if offset >= List.length(elems) then
-                eprint(String.to_string(offset) + " is out of bounds for array " + name);
+                    eprint(&format!("\(num |> to_string) is not a valid offset") |> as_str))
+                |> uint32_to_int32;
+            if offset >= ArrayList.length(elems) then
+                eprint(&format!("\(offset) is out of bounds for array \(name)") |> as_str);
             elems
-                |> List.at(offset)
-                |> run_query(reader, format!("\(name)[\(sub_query)]"));
+                |> ArrayList.at(offset)
+                |> run_query(reader, format!("\(name)[\(sub_query |> to_string)]"));
         ) else (
             eprint(&format!("\(name) is not an array") |> as_str)
         )
@@ -73,7 +75,7 @@ const main = () => (
             unwindable block (
                 with std.PanicHandler = {
                     .handle = msg => (
-                        std.io.eprint("bad query: " + msg);
+                        print!("\(msg)");
                         unwind block ()
                     ),
                 };
@@ -81,11 +83,11 @@ const main = () => (
                     std.io.eprint("bad query");
                     unwind block ()
                 ));
-                &value |> run_query(&mut reader, "$");
+                &value |> run_query(&mut reader, String.from_str("$"));
             );
         )
         | :Error { .err, .pos } => (
-            eprintln!("Error in input json at \(pos): \(err)");
+            eprintln!("Error in input json at \(pos |> to_string): \(err |> to_string)");
         )
     );
 );

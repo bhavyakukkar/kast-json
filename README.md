@@ -6,25 +6,24 @@ JSON parser in Kast
 ## Use as pretty-printer
 
 ```sh
-$ kast run pp.ks test.json
+$ make pp
+
+$ ./pp test.json
 # or, from stdin
-$ kast run pp.ks -
+$ ./pp -
 ```
 
 
 ## Use as JQ-like JSON query tool
 
-- Currently only works on the JS target
-- See [jq.ks](jq.ks)
-
 ```sh
-$ kast compile --target js --output jq.js jq.ks
+$ make jq
 
-$ node jq.js test.json ""
+$ ./jq test.json ""
 
-$ node jq.js test.json '"entities" "user_mentions" 0'
+$ ./jq test.json '"entities" "user_mentions" 0'
 # or, from stdin
-$ cat test.json | node jq.js - '"entities" "user_mentions" 0'
+$ cat test.json | ./jq - '"entities" "user_mentions" 0'
 
 ## {
 ##     "screen_name": "aym0566x",
@@ -38,7 +37,7 @@ $ cat test.json | node jq.js - '"entities" "user_mentions" 0'
 ## }
 
 # chain pipes
-$ cat test.json | node jq.js - '"entities" "user_mentions" 0' | node jq.js - '"indices" 1'
+$ cat test.json | ./jq - '"entities" "user_mentions" 0' | ./jq - '"indices" 1'
 ## 9
 ```
 
@@ -46,22 +45,37 @@ $ cat test.json | node jq.js - '"entities" "user_mentions" 0' | node jq.js - '"i
 ## Use as library
 
 ```nim
-const json = import "lib.ks";
+const {.Reader, .parse, ...} = import "./path/to/this/library/src/_lib.ks";
 
-let mut reader = json.Reader.create(&"[{\"some\": \"json\", \"\": true}, {}]");
+let mut reader = Reader.new(&"[{\"some\": \"json\", \"\": true}, {}]");
 
-match json.parse(&mut reader) with (
-    | :Ok value => value |> json.Value.pretty_printer |> String.to_string |> std.io.print
-    | :Error err => err |> dbg.print
-);
+let value = parse(&mut reader) |> Result.unwrap;
+println!("\(value |> Value.pretty_printer |> to_string)");
 
 ## [
 ##     {
 ##         "some": "json",
 ##         "": true
 ##     },
-##     {}
+##     {
+## 
+##     }
 ## ]
 ```
 
-- NOTE: [test.json](test.json) has been taken from within [twitter.json](https://github.com/miloyip/nativejson-benchmark/blob/master/data/twitter.json)
+
+## Run tests
+
+```sh
+$ make test
+
+$ ./test
+```
+
+- NOTE: [test.json](test.json) has been taken from within [twitter.json](https://github.com/miloyip/nativejson-benchmark/blob/478d5727c2a4048e835a29c65adecc7d795360d5/data/twitter.json)
+- NOTE: You can specify a different target directory than `target` in any of the `make x` build commands above by setting `TARGET`. Eg:
+  ```sh
+  $ TARGET=out make pp
+  $ file out/pp
+  # out/pp: ELF 64-bit LSB pie executable
+  ```
