@@ -10,10 +10,12 @@ let stdout = Mutex.new(());
 
 const TestCount = newtype {
     .num_passed :: UInt32,
-    .failed :: Rc.t[ArrayList.t[type {UInt32, String}]],
+    .failed :: ArrayList.t[type {UInt32, String}],
 };
-let test_count = Mutex.new({.num_passed = 0, .failed = Rc.new(ArrayList.new())} :: TestCount);
-@defer Mutex.drop(test_count);
+let test_count = Rc.new(Mutex.new({
+    .num_passed = 0,
+    .failed = ArrayList.new()
+} :: TestCount));
 
 let mut test_idx = 0;
 
@@ -25,19 +27,18 @@ const wait_for_tests_to_finish = (_ :: Ast) => `(
     );
 );
 const print_test_results = (_ :: Ast) => `(
-    let guard = Mutex.lock(&test_count);
+    let guard = Mutex.lock(&test_count^);
     @defer Mutex.unlock(guard);
 
-    if &guard.value^.failed^ |> ArrayList.is_empty then (
+    if &guard.value^.failed |> ArrayList.is_empty then (
         std.io.println!("all \(guard.value^.num_passed) tests passed 👍");
     ) else (
         std.io.println!("failed tests:");
-        for &{idx, msg} in &guard.value^.failed^ |> ArrayList.iter do (
+        for &{idx, msg} in &guard.value^.failed |> ArrayList.iter do (
             std.io.println!("\(idx): \(msg)");
         );
     );
 );
-
 
 const println = args => `(
     (
@@ -110,8 +111,8 @@ const test = (body :: Ast) -> Ast => @comptime_only `(
     let thread = spawn(@move () => with_return (
         with std.PanicHandler = {
             .handle = @move msg => (
-                let guard = Mutex.lock(&test_count);
-                &mut guard.value^.failed^
+                let guard = Mutex.lock(&test_count^);
+                &mut guard.value^.failed
                     |> ArrayList.push_back({test_idx, String.from_str(msg)});
                 Mutex.unlock(guard);
                 return
@@ -120,7 +121,7 @@ const test = (body :: Ast) -> Ast => @comptime_only `(
         };
         $body;
         (
-            let guard = Mutex.lock(&test_count);
+            let guard = Mutex.lock(&test_count^);
             @defer Mutex.unlock(guard);
             guard.value^.num_passed += 1;
         )
